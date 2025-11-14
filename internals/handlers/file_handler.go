@@ -34,10 +34,7 @@ func FileHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		len := len(chunkBuffer)
 		for i:= 0; i < len; i += MAX_CHUNKS {
-			end := i + MAX_CHUNKS
-			if end > len {
-				end = len
-			}
+			end := min(i + MAX_CHUNKS, len)
 			embeddings.ProcessChunksToEmbeddings(chunkBuffer[i:end])
 		}
 	}()
