@@ -1,15 +1,17 @@
 package main
 
 import (
-	"encoding/json"
-	"file-analyzer/internals/handlers"
+	"context"
+	"file-analyzer/internals/cohere"
+	db "file-analyzer/internals/db/qdrant"
+	"file-analyzer/internals/server"
 	"fmt"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/cors"
-	"github.com/joho/godotenv"
 	"log"
 	"net/http"
-	"os"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -18,27 +20,42 @@ func main() {
 		fmt.Println(err)
 		log.Fatal("Error loading .env file")
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	qClient, err := db.NewQdrantClient(ctx)
+	if err != nil {
+		fmt.Println("Error Initialising Qdrant Client", err)
+	}
+
+	cohereClient, err := cohere.NewCohereClient(ctx)
+	if err != nil {
+		fmt.Println("Error Initialising Cohere Client ", err)
+	}
+
+	exists, err := qClient.CollectionExists(ctx)
+	if err != nil {
+		log.Println("Error checking collection:", err)
+		return
+	}
+	if !exists {
+		err := qClient.CreateCollection(ctx)
+		if err != nil {
+			log.Println("Error Creating Collection", err)
+			return
+		}
+	}
+
+	defer qClient.Close()
+
 	r := chi.NewRouter()
 
-	// CORS
-	var allowedOrigins []string
-	json.Unmarshal([]byte(os.Getenv("ALLOWED_ORIGINS_JSON")), &allowedOrigins)
+	server.NewServer(r, qClient.Qdrant, cohereClient.Cohere)
 
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   allowedOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowCredentials: false,
-	}))
-
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("welcome"))
-	})
-
-	r.Post("/upload", handlers.FileHandler)
-
-	err = http.ListenAndServe(":8080", r)
+	err = http.ListenAndServe(":3000", r)
 	if err != nil {
 		log.Fatal("Server Exit")
 	}
-	fmt.Println("Server listening on port 8080")
+
+	fmt.Println("Server listening on port 3000")
 }
