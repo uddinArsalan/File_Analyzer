@@ -1,50 +1,82 @@
 package handlers
 
 import (
-	"file-analyzer/internals/embeddings"
+	// "file-analyzer/internals/config"
+	"file-analyzer/internals/cohere"
+	db "file-analyzer/internals/db/qdrant"
+	"file-analyzer/internals/utils"
 	"fmt"
+	"github.com/google/uuid"
 	"io"
-	"log"
 	"net/http"
+	"strings"
 )
 
-func FileHandler(w http.ResponseWriter, r *http.Request) {
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		fmt.Println("Error in File ")
-	}
-	const MAX_CHUNKS = 96
-	fmt.Println(header.Filename)
-	buff := make([]byte, 4096)
-	var chunk string
-	var chunkBuffer []string
-	go func() {
-		for {
-			n, err := file.Read(buff)
-			if err != nil {
-				if err == io.EOF {
-					break
-				}
-				log.Fatal(err)
-			}
-			chunk += string(buff[:n])
-			if len(chunk) >= 400 {
-				chunkBuffer = append(chunkBuffer, chunk)
-			}
-		}
-		len := len(chunkBuffer)
-		for i:= 0; i < len; i += MAX_CHUNKS {
-			end := i + MAX_CHUNKS
-			if end > len {
-				end = len
-			}
-			embeddings.ProcessChunksToEmbeddings(chunkBuffer[i:end])
-		}
-	}()
-	// after it store in db (doc id , user id ,file meta info ) maybe
+type UserFileHandler struct {
+	Qdrant *db.QdrantClient
+	Cohere *cohere.UserClient
+}
 
-	// fmt.Println("Data ", string(data))
+func NewFileHandler(qClient *db.QdrantClient, cohereClient *cohere.UserClient) *UserFileHandler {
+	return &UserFileHandler{Qdrant: qClient, Cohere: cohereClient}
+}
+
+func (f *UserFileHandler) FileHandler(w http.ResponseWriter, r *http.Request) {
+	file, _, err := r.FormFile("file")
 	if err != nil {
-		fmt.Println("ERROR")
+		utils.FAIL(w, http.StatusBadRequest, "Failed to read file")
+		return
 	}
+	// generate doc id (unique) for each document
+	// userId := r.Context().Value("userId").(string)
+	userId := "1"
+	docId := uuid.New().String()
+
+	const MAX_CHUNKS = 96
+	var (
+		buff        = make([]byte, 4096)
+		builder     strings.Builder
+		chunkBuffer []string
+	)
+	for {
+		n, err := file.Read(buff)
+		if n > 0 {
+			builder.Write(buff[:n])
+			if builder.Len() >= 400 {
+				chunkBuffer = append(chunkBuffer, builder.String())
+				builder.Reset()
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			utils.FAIL(w, http.StatusInternalServerError, "Failed to read file")
+			return
+		}
+	}
+	if builder.Len() > 0 {
+		chunkBuffer = append(chunkBuffer, builder.String())
+		builder.Reset()
+	}
+	fmt.Printf("Buffer %v\n", chunkBuffer)
+	for i := 0; i < len(chunkBuffer); i += MAX_CHUNKS {
+		end := min(i+MAX_CHUNKS, len(chunkBuffer))
+		chunks := chunkBuffer[i:end]
+		points, err := f.Cohere.ProcessChunks(r.Context(), userId, docId, chunks)
+		fmt.Printf("Points %v", points)
+		if err != nil {
+			utils.FAIL(w, http.StatusInternalServerError, "Failed to process embeddings")
+			return
+		}
+		// after it store in db (doc id , user id ,file meta info ) maybe
+		res, err := f.Qdrant.InsertVectorEmbeddings(points)
+		fmt.Println("Response ", res)
+		if err != nil {
+			utils.FAIL(w, http.StatusInternalServerError, "Internal Server Error")
+			return
+		}
+	}
+
+	utils.SUCCESS(w, "File Uploaded Successfully", nil)
 }
