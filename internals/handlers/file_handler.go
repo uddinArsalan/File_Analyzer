@@ -25,7 +25,7 @@ func (f *UserFileHandler) FileHandler(w http.ResponseWriter, r *http.Request) {
 	file, _, err := r.FormFile("file")
 	if err != nil {
 		utils.FAIL(w, http.StatusBadRequest, "Failed to read file")
-        return
+		return
 	}
 	// generate doc id (unique) for each document
 	// userId := r.Context().Value("userId").(string)
@@ -55,13 +55,19 @@ func (f *UserFileHandler) FileHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if builder.Len() > 0 {
+		chunkBuffer = append(chunkBuffer, builder.String())
+		builder.Reset()
+	}
+	fmt.Printf("Buffer %v\n", chunkBuffer)
 	for i := 0; i < len(chunkBuffer); i += MAX_CHUNKS {
 		end := min(i+MAX_CHUNKS, len(chunkBuffer))
 		chunks := chunkBuffer[i:end]
 		points, err := f.Cohere.ProcessChunks(r.Context(), userId, docId, chunks)
+		fmt.Printf("Points %v", points)
 		if err != nil {
 			utils.FAIL(w, http.StatusInternalServerError, "Failed to process embeddings")
-            return
+			return
 		}
 		// after it store in db (doc id , user id ,file meta info ) maybe
 		res, err := f.Qdrant.InsertVectorEmbeddings(points)

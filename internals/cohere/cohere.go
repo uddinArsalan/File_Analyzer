@@ -43,19 +43,17 @@ func (cc *UserClient) ProcessChunks(ctx context.Context, userId, docId string, c
 		return nil, fmt.Errorf("embedding generation failed: %w", err)
 	}
 
-	float64Emb := resp.Embeddings.Float[0]
-	float32Emb := make([]float32, len(float64Emb))
-	for i, v := range float64Emb {
-		float32Emb[i] = float32(v)
-	}
-
 	points := make([]*qdrant.PointStruct, 0, len(resp.Embeddings.Float))
-	for _, emb := range float32Emb {
-		chunkId := uuid.New().String()
 
+	for _, float64Vectors := range resp.Embeddings.Float {
+		vector := make([]float32, len(float64Vectors))
+		for i, v := range float64Vectors {
+			vector[i] = float32(v)
+		}
+		chunkId := uuid.New().String()
 		point := &qdrant.PointStruct{
 			Id:      qdrant.NewID(chunkId),
-			Vectors: qdrant.NewVectors(emb),
+			Vectors: qdrant.NewVectors(vector...),
 			Payload: qdrant.NewValueMap(map[string]any{
 				"user_id":  userId,
 				"doc_id":   docId,
@@ -64,6 +62,6 @@ func (cc *UserClient) ProcessChunks(ctx context.Context, userId, docId string, c
 		}
 		points = append(points, point)
 	}
-	// log.Printf("%+v", resp)
+
 	return points, nil
 }
