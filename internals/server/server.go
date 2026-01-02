@@ -7,33 +7,35 @@ import (
 	"file-analyzer/internals/handlers"
 	"file-analyzer/internals/middlewares"
 	"file-analyzer/internals/utils"
+	"log"
 	"net/http"
 	"os"
 
-	"github.com/cohere-ai/cohere-go/v2/client"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
-	"github.com/qdrant/go-client/qdrant"
 )
 
 type Server struct {
 	r      *chi.Mux
-	Qdrant *qdrant.Client
-	Cohere *client.Client
+	Qdrant *db.QdrantClient
+	Cohere *cohere.UserClient
+	logger *log.Logger
 }
 
-func NewServer(r *chi.Mux, qClient *qdrant.Client, cohereClient *client.Client) *Server {
+func NewServer(r *chi.Mux, qClient *db.QdrantClient, cohereClient *cohere.UserClient, logger *log.Logger) *Server {
 	s := &Server{
 		r:      r,
 		Qdrant: qClient,
 		Cohere: cohereClient,
+		logger: logger,
 	}
 	s.routes()
 	return s
 }
 
 func (s *Server) routes() {
-	userFileHandler := handlers.NewFileHandler(&db.QdrantClient{Qdrant: s.Qdrant}, &cohere.UserClient{Cohere: s.Cohere})
+	userFileHandler := handlers.NewFileHandler(s.Qdrant, s.Cohere, s.logger)
+	askHandler := handlers.NewAskHandler(s.Qdrant, s.Cohere,s.logger)
 
 	// middlewares
 	s.r.Use(middlewares.RateLimiter)
@@ -51,6 +53,8 @@ func (s *Server) routes() {
 	s.r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		utils.SUCCESS(w, "welcome", nil)
 	})
+
+	s.r.Post("/ask/{docId}", askHandler.Askandler)
 
 	s.r.Post("/upload", userFileHandler.FileHandler)
 }

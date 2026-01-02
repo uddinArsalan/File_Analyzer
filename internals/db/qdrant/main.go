@@ -3,8 +3,9 @@ package db
 import (
 	"context"
 	"fmt"
-	"github.com/qdrant/go-client/qdrant"
 	"os"
+
+	"github.com/qdrant/go-client/qdrant"
 )
 
 type QdrantClient struct {
@@ -43,6 +44,15 @@ func (qClient *QdrantClient) CreateCollection(ctx context.Context) error {
 	})
 }
 
+func (qClient *QdrantClient) EnsurePayLoadIndex(ctx context.Context, fieldName string) error {
+	_, err := qClient.Qdrant.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
+		CollectionName: "documents",
+		FieldName:      fieldName,
+		FieldType : qdrant.FieldType_FieldTypeKeyword.Enum(),
+	})
+	return err
+}
+
 func (qClient *QdrantClient) CollectionExists(ctx context.Context) (bool, error) {
 	isExists, err := qClient.Qdrant.CollectionExists(ctx, "documents")
 	if err != nil {
@@ -55,6 +65,27 @@ func (qClient *QdrantClient) InsertVectorEmbeddings(points []*qdrant.PointStruct
 	res, err := qClient.Qdrant.Upsert(context.Background(), &qdrant.UpsertPoints{
 		CollectionName: "documents",
 		Points:         points,
+	})
+	return res, err
+}
+
+func (qClient *QdrantClient) SearchEmbedInDocument(ctx context.Context, embedding []float64, docId string) ([]*qdrant.ScoredPoint, error) {
+	var embed = make([]float32, len(embedding))
+	for i, val := range embedding {
+		embed[i] = float32(val)
+	}
+	// threshold := float32(0.75)
+	res, err := qClient.Qdrant.Query(ctx, &qdrant.QueryPoints{
+		CollectionName: "documents",
+		Query:          qdrant.NewQueryDense(embed),
+		Filter: &qdrant.Filter{
+			Must: []*qdrant.Condition{
+				qdrant.NewMatch("doc_id", docId),
+			},
+		},
+		WithPayload: qdrant.NewWithPayload(true),
+		WithVectors: qdrant.NewWithVectorsInclude(),
+		// ScoreThreshold: &threshold,
 	})
 	return res, err
 }
