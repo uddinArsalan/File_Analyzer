@@ -3,7 +3,6 @@ package cohere
 import (
 	"context"
 	"fmt"
-	// db "file-analyzer/internals/db/qdrant"
 	"log"
 	"os"
 
@@ -28,28 +27,40 @@ func NewCohereClient(ctx context.Context) (*UserClient, error) {
 	return &UserClient{Cohere: cohereClient}, nil
 }
 
-func (cc *UserClient) ProcessChunks(ctx context.Context, userId, docId string, chunksText []string) ([]*qdrant.PointStruct, error) {
+func (cc *UserClient) GenerateEmbedding(ctx context.Context, text []string, inputType cohere.EmbedInputType) (*cohere.EmbedByTypeResponse, error) {
 	resp, err := cc.Cohere.V2.Embed(
 		context.TODO(),
 		&cohere.V2EmbedRequest{
-			Texts:          chunksText,
+			Texts:          text,
 			Model:          "embed-v4.0",
-			InputType:      cohere.EmbedInputTypeSearchDocument,
+			InputType:      inputType,
 			EmbeddingTypes: []cohere.EmbeddingType{cohere.EmbeddingTypeFloat},
 		},
 	)
 	if err != nil {
 		log.Printf("Failed to generate embeddings: %v", err)
-		return nil, fmt.Errorf("embedding generation failed: %w", err)
+		return nil, fmt.Errorf("Embedding generation failed: %w", err)
+	}
+	return resp, nil
+}
+
+func (cc *UserClient) ProcessChunks(ctx context.Context, userId, docId string, chunksText []string) ([]*qdrant.PointStruct, error) {
+
+	// fmt.Printf("Chunks Text int ProcessChunks %v", chunksText)
+	resp, err := cc.GenerateEmbedding(ctx, chunksText, cohere.EmbedInputTypeSearchDocument)
+	if err != nil {
+		return nil, err
 	}
 
 	points := make([]*qdrant.PointStruct, 0, len(resp.Embeddings.Float))
 
-	for _, float64Vectors := range resp.Embeddings.Float {
+	for i, float64Vectors := range resp.Embeddings.Float {
 		vector := make([]float32, len(float64Vectors))
 		for i, v := range float64Vectors {
 			vector[i] = float32(v)
 		}
+		// fmt.Printf("Vector i %v in ProcessChunks %v", i, vector)
+		// fmt.Printf("chunksText[i] %v in ProcessChunks", chunksText[i])
 		chunkId := uuid.New().String()
 		point := &qdrant.PointStruct{
 			Id:      qdrant.NewID(chunkId),
@@ -58,6 +69,7 @@ func (cc *UserClient) ProcessChunks(ctx context.Context, userId, docId string, c
 				"user_id":  userId,
 				"doc_id":   docId,
 				"chunk_id": chunkId,
+				"text":     chunksText[i],
 			}),
 		}
 		points = append(points, point)

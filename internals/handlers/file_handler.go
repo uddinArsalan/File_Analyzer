@@ -1,24 +1,29 @@
 package handlers
 
 import (
-	// "file-analyzer/internals/config"
-	"file-analyzer/internals/cohere"
-	db "file-analyzer/internals/db/qdrant"
+	"file-analyzer/internals/domain"
 	"file-analyzer/internals/utils"
-	"fmt"
-	"github.com/google/uuid"
+	// "fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 type UserFileHandler struct {
-	Qdrant *db.QdrantClient
-	Cohere *cohere.UserClient
+	Repo domain.DocumentRepository
+	LLM  domain.EmbeddingService
+	l    *log.Logger
 }
 
-func NewFileHandler(qClient *db.QdrantClient, cohereClient *cohere.UserClient) *UserFileHandler {
-	return &UserFileHandler{Qdrant: qClient, Cohere: cohereClient}
+func NewFileHandler(repo domain.DocumentRepository, llm domain.EmbeddingService, l *log.Logger) *UserFileHandler {
+	return &UserFileHandler{
+		Repo: repo,
+		LLM:  llm,
+		l:    l,
+	}
 }
 
 func (f *UserFileHandler) FileHandler(w http.ResponseWriter, r *http.Request) {
@@ -59,24 +64,24 @@ func (f *UserFileHandler) FileHandler(w http.ResponseWriter, r *http.Request) {
 		chunkBuffer = append(chunkBuffer, builder.String())
 		builder.Reset()
 	}
-	fmt.Printf("Buffer %v\n", chunkBuffer)
+	// fmt.Printf("chunkBuffer %v in FileHandler", chunkBuffer)
 	for i := 0; i < len(chunkBuffer); i += MAX_CHUNKS {
 		end := min(i+MAX_CHUNKS, len(chunkBuffer))
 		chunks := chunkBuffer[i:end]
-		points, err := f.Cohere.ProcessChunks(r.Context(), userId, docId, chunks)
-		fmt.Printf("Points %v", points)
+		// fmt.Printf("chunks passed in ProcessChunks from FileHandler %v", chunks)
+		points, err := f.LLM.ProcessChunks(r.Context(), userId, docId, chunks)
 		if err != nil {
 			utils.FAIL(w, http.StatusInternalServerError, "Failed to process embeddings")
 			return
 		}
 		// after it store in db (doc id , user id ,file meta info ) maybe
-		res, err := f.Qdrant.InsertVectorEmbeddings(points)
-		fmt.Println("Response ", res)
+		res, err := f.Repo.InsertVectorEmbeddings(points)
+		f.l.Println("Response ", res)
 		if err != nil {
 			utils.FAIL(w, http.StatusInternalServerError, "Internal Server Error")
 			return
 		}
 	}
 
-	utils.SUCCESS(w, "File Uploaded Successfully", nil)
+	utils.SUCCESS(w, "File Uploaded Successfully", docId)
 }

@@ -5,9 +5,11 @@ import (
 	"file-analyzer/internals/cohere"
 	db "file-analyzer/internals/db/qdrant"
 	"file-analyzer/internals/server"
-	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -16,33 +18,40 @@ import (
 
 func main() {
 	err := godotenv.Load()
+	l := log.New(os.Stdout, "DOC API:", log.LstdFlags)
 	if err != nil {
-		fmt.Println(err)
-		log.Fatal("Error loading .env file")
+		l.Fatal("Error loading .env file", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
 	qClient, err := db.NewQdrantClient(ctx)
 	if err != nil {
-		fmt.Println("Error Initialising Qdrant Client", err)
+		l.Fatal("Error Initialising Qdrant Client", err)
 	}
 
 	cohereClient, err := cohere.NewCohereClient(ctx)
 	if err != nil {
-		fmt.Println("Error Initialising Cohere Client ", err)
+		l.Fatal("Error Initialising Cohere Client ", err)
 	}
 
 	exists, err := qClient.CollectionExists(ctx)
 	if err != nil {
-		log.Println("Error checking collection:", err)
+		l.Println("Error checking collection:", err)
 		return
 	}
 	if !exists {
 		err := qClient.CreateCollection(ctx)
 		if err != nil {
-			log.Println("Error Creating Collection", err)
-			return
+			l.Fatal("Error Creating Collection", err)
+		}
+	}
+
+	var payloadFields = []string{"doc_id", "user_id", "org_id"}
+	for _, fieldName := range payloadFields {
+		err := qClient.EnsurePayLoadIndex(ctx, fieldName)
+		if err != nil {
+			l.Printf("Index create skipped for %s: %v\n", fieldName, err)
 		}
 	}
 
@@ -50,12 +59,32 @@ func main() {
 
 	r := chi.NewRouter()
 
-	server.NewServer(r, qClient.Qdrant, cohereClient.Cohere)
+	server.NewServer(r, qClient, cohereClient, l)
 
-	err = http.ListenAndServe(":3000", r)
-	if err != nil {
-		log.Fatal("Server Exit")
+	s := &http.Server{
+		Addr:         ":3000",
+		Handler:      r,
+		ReadTimeout:  20 * time.Second,
+		WriteTimeout: 2 * time.Second,
+		IdleTimeout:  20 * time.Second,
 	}
 
-	fmt.Println("Server listening on port 3000")
+	go func() {
+		err := s.ListenAndServe()
+		if err != nil {
+			log.Fatalf("Server Exit %v", err)
+		}
+	}()
+	l.Println("Server listening on port 3000")
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGTERM)
+	signal.Notify(sigChan, os.Interrupt)
+
+	sign := <-sigChan
+	l.Printf("Gracefully Shutdown , Recieve Signal : %v", sign)
+
+	ctx, cancel = context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	s.Shutdown(ctx)
 }
