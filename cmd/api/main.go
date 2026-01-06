@@ -3,7 +3,8 @@ package main
 import (
 	"context"
 	"file-analyzer/internals/cohere"
-	db "file-analyzer/internals/db/qdrant"
+	"file-analyzer/internals/db/db"
+	qdrant "file-analyzer/internals/db/qdrant"
 	"file-analyzer/internals/server"
 	"log"
 	"net/http"
@@ -18,14 +19,20 @@ import (
 
 func main() {
 	err := godotenv.Load()
-	l := log.New(os.Stdout, "DOC API:", log.LstdFlags)
+	l := log.New(os.Stdout, "DOC API: ", log.LstdFlags|log.Lshortfile)
 	if err != nil {
 		l.Fatal("Error loading .env file", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	qClient, err := db.NewQdrantClient(ctx)
+	dbClient, err := db.NewDBConnection(l)
+	if err != nil {
+		l.Fatal(err)
+	}
+	defer dbClient.CloseDB()
+
+	qClient, err := qdrant.NewQdrantClient(ctx)
 	if err != nil {
 		l.Fatal("Error Initialising Qdrant Client", err)
 	}
@@ -59,7 +66,7 @@ func main() {
 
 	r := chi.NewRouter()
 
-	server.NewServer(r, qClient, cohereClient, l)
+	server.NewServer(r, qClient, cohereClient, l, dbClient)
 
 	s := &http.Server{
 		Addr:         ":3000",

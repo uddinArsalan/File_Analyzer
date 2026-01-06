@@ -3,8 +3,10 @@ package server
 import (
 	"encoding/json"
 	"file-analyzer/internals/cohere"
-	db "file-analyzer/internals/db/qdrant"
+	"file-analyzer/internals/db/db"
+	qdrant "file-analyzer/internals/db/qdrant"
 	"file-analyzer/internals/handlers"
+	"file-analyzer/internals/handlers/auth"
 	"file-analyzer/internals/middlewares"
 	"file-analyzer/internals/utils"
 	"log"
@@ -17,17 +19,19 @@ import (
 
 type Server struct {
 	r      *chi.Mux
-	Qdrant *db.QdrantClient
+	Qdrant *qdrant.QdrantClient
 	Cohere *cohere.UserClient
 	logger *log.Logger
+	db     *db.DBClient
 }
 
-func NewServer(r *chi.Mux, qClient *db.QdrantClient, cohereClient *cohere.UserClient, logger *log.Logger) *Server {
+func NewServer(r *chi.Mux, qClient *qdrant.QdrantClient, cohereClient *cohere.UserClient, logger *log.Logger, db *db.DBClient) *Server {
 	s := &Server{
 		r:      r,
 		Qdrant: qClient,
 		Cohere: cohereClient,
 		logger: logger,
+		db:     db,
 	}
 	s.routes()
 	return s
@@ -35,7 +39,8 @@ func NewServer(r *chi.Mux, qClient *db.QdrantClient, cohereClient *cohere.UserCl
 
 func (s *Server) routes() {
 	userFileHandler := handlers.NewFileHandler(s.Qdrant, s.Cohere, s.logger)
-	askHandler := handlers.NewAskHandler(s.Qdrant, s.Cohere,s.logger)
+	askHandler := handlers.NewAskHandler(s.Qdrant, s.Cohere, s.logger)
+	authHandler := auth.NewAuthHandler(s.logger, s.db)
 
 	// middlewares
 	s.r.Use(middlewares.RateLimiter)
@@ -50,11 +55,13 @@ func (s *Server) routes() {
 		AllowCredentials: false,
 	}))
 
-	s.r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		utils.SUCCESS(w, "welcome", nil)
-	})
+	s.r.Get("/health", middlewares.Auth(func(w http.ResponseWriter, r *http.Request) {
+		utils.SUCCESS(w, "All good", nil)
+	}))
 
 	s.r.Post("/ask/{docId}", askHandler.Askandler)
+	s.r.Post("/auth/login", authHandler.LoginHandler)
+	s.r.Post("/auth/register", authHandler.RegisterHandler)
 
 	s.r.Post("/upload", userFileHandler.FileHandler)
 }
