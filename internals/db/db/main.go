@@ -2,7 +2,7 @@ package db
 
 import (
 	"database/sql"
-	"file-analyzer/models"
+	"file-analyzer/internals/domain"
 	"fmt"
 	"log"
 	"os"
@@ -21,6 +21,10 @@ func NewDBConnection(l *log.Logger) (*DBClient, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Error Initialising Connection %v", err.Error())
 	}
+	err = db.Ping()
+	if err != nil {
+		return nil, fmt.Errorf("Error Ping Connection %v", err.Error())
+	}
 	return &DBClient{l, db}, nil
 }
 
@@ -28,19 +32,22 @@ func (dbClient *DBClient) CloseDB() error {
 	return dbClient.db.Close()
 }
 
-func (dbClient *DBClient) CheckUserExist(email string) (string, error) {
-	var userId string
-	query := "SELECT user_id FROM users WHERE email = $1"
-	row := dbClient.db.QueryRow(query, email)
-	err := row.Scan(&userId)
+func (dbClient *DBClient) FindUserByEmail(email string) (domain.User, error) {
+	var user domain.User
+	query := `SELECT user_id,name,email, password_hash
+    		FROM users
+    		WHERE email = $1`
+	err := dbClient.db.
+		QueryRow(query, email).
+		Scan(&user.UserID, &user.Name, &user.Email, &user.PasswordHash)
 	if err != nil {
-		return "", err
+		return domain.User{}, err
 	}
-	return userId, nil
+	return user, nil
 }
 
-func (dbClient *DBClient) FindUserById(userId string) (models.User, error) {
-	var user models.User
+func (dbClient *DBClient) FindUserById(userId string) (domain.User, error) {
+	var user domain.User
 	query := `
     		SELECT user_id,name,email, password_hash
     		FROM users
@@ -48,14 +55,14 @@ func (dbClient *DBClient) FindUserById(userId string) (models.User, error) {
 		`
 	err := dbClient.db.
 		QueryRow(query, userId).
-		Scan(&user.UserId, &user.Name, &user.Email, &user.PasswordHash)
+		Scan(&user.UserID, &user.Name, &user.Email, &user.PasswordHash)
 	if err != nil {
-		return models.User{}, err
+		return domain.User{}, err
 	}
 	return user, nil
 }
 
-func (dbClient *DBClient) InsertUser(user models.User) error {
+func (dbClient *DBClient) InsertUser(user domain.User) error {
 	query := `
     		INSERT INTO TABLE users (name,email,password_hash) VALUES ($1,$2,$3)
 		`

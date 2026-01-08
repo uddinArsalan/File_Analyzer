@@ -2,9 +2,10 @@ package main
 
 import (
 	"context"
-	"file-analyzer/internals/cohere"
+	"file-analyzer/internals/adapters/cohere"
+	"file-analyzer/internals/adapters/jwt"
+	"file-analyzer/internals/adapters/qdrant"
 	"file-analyzer/internals/db/db"
-	qdrant "file-analyzer/internals/db/qdrant"
 	"file-analyzer/internals/server"
 	"log"
 	"net/http"
@@ -26,13 +27,16 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
+	secret := os.Getenv("JWT_SECRET_KEY")
+	collection := os.Getenv("COLLECTION_NAME")
+
 	dbClient, err := db.NewDBConnection(l)
 	if err != nil {
 		l.Fatal(err)
 	}
 	defer dbClient.CloseDB()
 
-	qClient, err := qdrant.NewQdrantClient(ctx)
+	qClient, err := qdrant.NewQdrantClient(ctx, collection)
 	if err != nil {
 		l.Fatal("Error Initialising Qdrant Client", err)
 	}
@@ -44,8 +48,7 @@ func main() {
 
 	exists, err := qClient.CollectionExists(ctx)
 	if err != nil {
-		l.Println("Error checking collection:", err)
-		return
+		l.Fatal("Error checking collection:", err)
 	}
 	if !exists {
 		err := qClient.CreateCollection(ctx)
@@ -66,7 +69,9 @@ func main() {
 
 	r := chi.NewRouter()
 
-	server.NewServer(r, qClient, cohereClient, l, dbClient)
+	tokenService := jwt.NewJwtService(secret)
+
+	server.NewServer(r, qClient, cohereClient, dbClient, l, tokenService)
 
 	s := &http.Server{
 		Addr:         ":3000",
@@ -82,13 +87,14 @@ func main() {
 			log.Fatalf("Server Exit %v", err)
 		}
 	}()
+
 	l.Println("Server listening on port 3000")
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM)
 	signal.Notify(sigChan, os.Interrupt)
 
 	sign := <-sigChan
-	l.Printf("Gracefully Shutdown , Recieve Signal : %v", sign)
+	l.Printf("Gracefully Shutdown , Received Signal : %v", sign)
 
 	ctx, cancel = context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
