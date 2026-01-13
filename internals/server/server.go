@@ -61,9 +61,13 @@ func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedde
 		utils.SUCCESS(w, "All good", nil)
 	}))
 
+	// DOC ROUTES
 	s.router.Post("/ask/{docId}", askHandler.AskHandler)
+
+	// AUTH ROUTES
 	s.router.Post("/auth/login", authHandler.LoginHandler)
 	s.router.Post("/auth/register", authHandler.RegisterHandler)
+	s.router.Post("/auth/refresh", authHandler.RefreshHandler)
 
 	s.router.Post("/upload", userFileHandler.FileHandler)
 }

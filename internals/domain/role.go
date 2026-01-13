@@ -8,6 +8,6 @@ const (
 )
 
 type Role struct {
-	ID   int64    `json:"id"`
-	Name RoleName `json:"role_name"`
+	ID   int64
+	Name RoleName
 }

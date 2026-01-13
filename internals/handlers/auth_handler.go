@@ -40,7 +40,7 @@ func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	SetCookie(r, w, "refresh_token", token.RefreshToken, 7*time.Now().Day())
+	SetCookie(r, w, "refresh_token", token.RefreshToken, 7*24*time.Hour)
 	utils.SUCCESS(w, "Login Successfully", dto.LoginResponse{
 		AccessToken: token.AccessToken,
 	})
@@ -62,7 +62,20 @@ func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	utils.SUCCESS(w, "Users Registered Successfully", nil)
 }
 
-func SetCookie(r *http.Request, w http.ResponseWriter, name string, value string, maxAge int) {
+func (h *AuthHandler) RefreshHandler(w http.ResponseWriter, r *http.Request) {
+	incomingRefreshToken, err := r.Cookie("refresh_token")
+	if err != nil {
+		h.l.Println("Error Reading Refresh Token")
+		utils.FAIL(w, http.StatusBadRequest, "Internal Server Error")
+	}
+	token, err := h.service.Refresh(incomingRefreshToken.Name)
+	SetCookie(r, w, "refresh_token", token.RefreshToken, 7*24*time.Hour)
+	utils.SUCCESS(w, "Token Refreshed Successfully", dto.LoginResponse{
+		AccessToken: token.AccessToken,
+	})
+}
+
+func SetCookie(r *http.Request, w http.ResponseWriter, name string, value string, maxAge time.Duration) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     name,
 		Value:    value,
@@ -70,7 +83,7 @@ func SetCookie(r *http.Request, w http.ResponseWriter, name string, value string
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
-		MaxAge:   maxAge,
+		MaxAge:   int(maxAge.Seconds()),
 	})
 }
 
