@@ -55,7 +55,10 @@ func (s *AuthService) Login(email, password string) (*AuthTokens, error) {
 		return &AuthTokens{}, err
 	}
 	tokenHash := generateHash(refreshToken)
-	s.users.InsertRefreshToken(tokenHash, user.UserID, refreshExpiry)
+	_, err = s.users.InsertRefreshToken(tokenHash, user.UserID, refreshExpiry)
+	if err != nil {
+		return &AuthTokens{}, err
+	}
 	return &AuthTokens{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
@@ -101,6 +104,18 @@ func (s *AuthService) Refresh(incomingToken string) (*AuthTokens, error) {
 		AccessToken:  accessToken,
 		RefreshToken: newRefreshToken,
 	}, nil
+}
+
+func (s *AuthService) VerifyToken(tokenStr string) (string, error) {
+	token, err := s.jwt.VerifyToken(tokenStr)
+	if err != nil {
+		return "", err
+	}
+	userId, err := token.Claims.GetSubject()
+	if err != nil {
+		return "", err
+	}
+	return userId, nil
 }
 
 func generateHash(refreshToken string) string {

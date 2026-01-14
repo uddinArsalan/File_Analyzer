@@ -29,3 +29,13 @@ func (j *JWTService) GenerateJWT(userId int64, ttl time.Duration) (string, error
 	}
 	return token, nil
 }
+
+func (j *JWTService) VerifyToken(tokenString string) (*jwt.Token, error) {
+	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (any, error) {
+		return j.secret, nil
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
+	if err != nil || !token.Valid {
+		return nil, err
+	}
+	return token, nil
+}

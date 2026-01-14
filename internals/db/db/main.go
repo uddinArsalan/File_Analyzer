@@ -17,7 +17,7 @@ type DBClient struct {
 }
 
 func NewDBConnection(l *log.Logger) (*DBClient, error) {
-	connStr := os.Getenv("DB_CONN_STR")
+	connStr := os.Getenv("DB_URL")
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return nil, fmt.Errorf("Error Initialising Connection %v", err.Error())
@@ -81,7 +81,7 @@ func (dbClient *DBClient) FindUserByToken(tokenHash string) (domain.RefreshToken
 
 func (dbClient *DBClient) InsertUser(user domain.User) error {
 	query := `
-    		INSERT INTO TABLE users (name,email,password_hash) VALUES ($1,$2,$3)
+    		INSERT INTO users (name,email,password_hash) VALUES ($1,$2,$3)
 		`
 	_, err := dbClient.db.Exec(query, user.Name, user.Email, user.PasswordHash)
 	return err
@@ -89,7 +89,7 @@ func (dbClient *DBClient) InsertUser(user domain.User) error {
 
 func (dbClient *DBClient) InsertRefreshToken(tokenHash string, userID int64, ttl time.Duration) (int64, error) {
 	query := `
-	INSERT INTO REFRESH_TOKENS (user_id,token_hash,expires_at) VALUES($1,$2,$3) RETURNING id
+	INSERT INTO refresh_tokens (user_id,token_hash,expires_at) VALUES($1,$2,$3) RETURNING id
 	`
 	var id int64
 	err := dbClient.db.QueryRow(query, userID, tokenHash, time.Now().Add(ttl)).Scan(&id)

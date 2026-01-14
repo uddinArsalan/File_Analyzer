@@ -1,23 +1,36 @@
 package middlewares
 
 import (
+	"context"
+	"file-analyzer/internals/services"
 	"file-analyzer/internals/utils"
-	"log"
 	"net/http"
+	"strings"
 )
 
-func Auth(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		username, password, ok := r.BasicAuth()
-		if !ok {
-			log.Println()
-			utils.FAIL(w, http.StatusInternalServerError, "Failed to do Basic Auth ")
-			return
-		}
-		if username != "Arsu" || password != "pass" {
-			utils.FAIL(w, http.StatusUnauthorized, "Unauthorized")
-			return
-		}
-		next(w, r)
+type UserID struct{}
+
+func Auth(s services.AuthService) func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "" {
+				utils.FAIL(w, http.StatusUnauthorized, "Missing Authorization Header")
+				return
+			}
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) != 2 || parts[0] != "Bearer" {
+				utils.FAIL(w, http.StatusUnauthorized, "Invalid Authorization Header")
+				return
+			}
+			userID, err := s.VerifyToken(parts[1])
+			if err != nil {
+				utils.FAIL(w, http.StatusUnauthorized, "Invalid token")
+				return
+			}
+			ctx := context.WithValue(r.Context(), UserID{}, userID)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
 	}
+
 }

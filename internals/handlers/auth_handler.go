@@ -28,7 +28,6 @@ func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		utils.FAIL(w, http.StatusBadRequest, "Invalid Request")
 		return
 	}
-
 	token, err := h.service.Login(req.Email, req.Password)
 	if err != nil {
 		h.l.Printf("Login Error %v ", err)

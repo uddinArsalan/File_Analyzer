@@ -42,32 +42,42 @@ func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedde
 	askHandler := handlers.NewAskHandler(askService, s.logger)
 	authHandler := handlers.NewAuthHandler(s.logger, authService)
 
-	// middlewares
-	s.router.Use(middlewares.RateLimiter)
-
 	// CORS
 	var allowedOrigins []string
 	if err := json.Unmarshal([]byte(os.Getenv("ALLOWED_ORIGINS_JSON")), &allowedOrigins); err != nil {
 		s.logger.Println("invalid ALLOWED_ORIGINS_JSON", err)
 	}
 
-	s.router.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   allowedOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowCredentials: false,
-	}))
+	s.router.Group(func(r chi.Router) {
+		r.Use(cors.Handler(cors.Options{
+			AllowedOrigins:   allowedOrigins,
+			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+			AllowCredentials: false,
+		}))
 
-	s.router.Get("/health", middlewares.Auth(func(w http.ResponseWriter, r *http.Request) {
-		utils.SUCCESS(w, "All good", nil)
-	}))
+		// PUBLIC ROUTES GROUP
+		r.Group(func(r chi.Router) {
+			r.Post("/auth/login", authHandler.LoginHandler)
+			r.Post("/auth/register", authHandler.RegisterHandler)
+		})
 
-	// DOC ROUTES
-	s.router.Post("/ask/{docId}", askHandler.AskHandler)
+		// PRIVATE ROUTES GROUP
+		r.Group(func(r chi.Router) {
+			r.Use(middlewares.Auth(*authService))
 
-	// AUTH ROUTES
-	s.router.Post("/auth/login", authHandler.LoginHandler)
-	s.router.Post("/auth/register", authHandler.RegisterHandler)
-	s.router.Post("/auth/refresh", authHandler.RefreshHandler)
+			r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+				s.logger.Println(r.Context().Value(middlewares.UserID{}))
+				utils.SUCCESS(w, "All good", nil)
+			})
 
-	s.router.Post("/upload", userFileHandler.FileHandler)
+			// DOC ROUTES
+			r.Post("/ask/{docId}", askHandler.AskHandler)
+
+			r.Post("/auth/refresh", authHandler.RefreshHandler)
+
+			r.Post("/upload", userFileHandler.FileHandler)
+		})
+
+	})
+
 }
