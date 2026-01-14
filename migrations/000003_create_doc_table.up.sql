@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS DOCUMENTS(
+    id SERIAL PRIMARY KEY NOT NULL,
+    user_id INT,
+    name TEXT NOT NULL,
+    doc_url TEXT NOT NULL,
+    doc_size INT NOT NULL,  
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT fk_user FOREIGN KEY(user_id) REFERENCES USERS(user_id)
+)

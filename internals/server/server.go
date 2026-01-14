@@ -2,10 +2,13 @@ package server
 
 import (
 	"encoding/json"
-	"file-analyzer/internals/cohere"
-	db "file-analyzer/internals/db/qdrant"
+	"file-analyzer/internals/adapters/cohere"
+	"file-analyzer/internals/adapters/jwt"
+	"file-analyzer/internals/adapters/qdrant"
 	"file-analyzer/internals/handlers"
 	"file-analyzer/internals/middlewares"
+	repo "file-analyzer/internals/repository"
+	"file-analyzer/internals/services"
 	"file-analyzer/internals/utils"
 	"log"
 	"net/http"
@@ -16,45 +19,65 @@ import (
 )
 
 type Server struct {
-	r      *chi.Mux
-	Qdrant *db.QdrantClient
-	Cohere *cohere.UserClient
+	router *chi.Mux
 	logger *log.Logger
 }
 
-func NewServer(r *chi.Mux, qClient *db.QdrantClient, cohereClient *cohere.UserClient, logger *log.Logger) *Server {
+func NewServer(router *chi.Mux, qdrantClient qdrant.VectorStore, embedder cohere.Embedder, userRepo repo.UserRepository, logger *log.Logger, tokenService jwt.TokenService) *Server {
 	s := &Server{
-		r:      r,
-		Qdrant: qClient,
-		Cohere: cohereClient,
+		router: router,
 		logger: logger,
 	}
-	s.routes()
+	s.routes(qdrantClient, embedder, tokenService, userRepo)
 	return s
 }
 
-func (s *Server) routes() {
-	userFileHandler := handlers.NewFileHandler(s.Qdrant, s.Cohere, s.logger)
-	askHandler := handlers.NewAskHandler(s.Qdrant, s.Cohere,s.logger)
+func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedder, tokenService jwt.TokenService, userRepo repo.UserRepository) {
+	// services
+	fileService := services.NewFileService(qdrantClient, embedder)
+	askService := services.NewAskService(qdrantClient, embedder)
+	authService := services.NewAuthService(userRepo, tokenService)
 
-	// middlewares
-	s.r.Use(middlewares.RateLimiter)
+	userFileHandler := handlers.NewFileHandler(fileService, s.logger)
+	askHandler := handlers.NewAskHandler(askService, s.logger)
+	authHandler := handlers.NewAuthHandler(s.logger, authService)
 
 	// CORS
 	var allowedOrigins []string
-	json.Unmarshal([]byte(os.Getenv("ALLOWED_ORIGINS_JSON")), &allowedOrigins)
+	if err := json.Unmarshal([]byte(os.Getenv("ALLOWED_ORIGINS_JSON")), &allowedOrigins); err != nil {
+		s.logger.Println("invalid ALLOWED_ORIGINS_JSON", err)
+	}
 
-	s.r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   allowedOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowCredentials: false,
-	}))
+	s.router.Group(func(r chi.Router) {
+		r.Use(cors.Handler(cors.Options{
+			AllowedOrigins:   allowedOrigins,
+			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+			AllowCredentials: false,
+		}))
 
-	s.r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		utils.SUCCESS(w, "welcome", nil)
+		// PUBLIC ROUTES GROUP
+		r.Group(func(r chi.Router) {
+			r.Post("/auth/login", authHandler.LoginHandler)
+			r.Post("/auth/register", authHandler.RegisterHandler)
+		})
+
+		// PRIVATE ROUTES GROUP
+		r.Group(func(r chi.Router) {
+			r.Use(middlewares.Auth(*authService))
+
+			r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+				s.logger.Println(r.Context().Value(middlewares.UserID{}))
+				utils.SUCCESS(w, "All good", nil)
+			})
+
+			// DOC ROUTES
+			r.Post("/ask/{docId}", askHandler.AskHandler)
+
+			r.Post("/auth/refresh", authHandler.RefreshHandler)
+
+			r.Post("/upload", userFileHandler.FileHandler)
+		})
+
 	})
 
-	s.r.Post("/ask/{docId}", askHandler.Askandler)
-
-	s.r.Post("/upload", userFileHandler.FileHandler)
 }
