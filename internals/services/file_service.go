@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"file-analyzer/internals/adapters/backblaze"
 	llm "file-analyzer/internals/adapters/cohere"
 	"file-analyzer/internals/adapters/qdrant"
 	"io"
@@ -13,15 +14,17 @@ import (
 )
 
 type FileService struct {
-	vector qdrant.VectorStore
-	llm    llm.Embedder
+	vector   qdrant.VectorStore
+	llm      llm.Embedder
+	s3Client backblaze.S3Store
 }
 
 func NewFileService(vector qdrant.VectorStore,
-	llm llm.Embedder) *FileService {
+	llm llm.Embedder, s3Client backblaze.S3Store) *FileService {
 	return &FileService{
-		vector: vector,
-		llm:    llm,
+		vector:   vector,
+		llm:      llm,
+		s3Client: s3Client,
 	}
 }
 
@@ -74,4 +77,12 @@ func (f *FileService) UploadAndProcess(ctx context.Context, file multipart.File,
 		}
 	}
 	return docId, nil
+}
+
+func (f *FileService) GeneratePresignedURL(ctx context.Context, userId string, fileName string) (string, error) {
+	url, err := f.s3Client.GeneratePresignedURL(ctx, userId, fileName)
+	if err != nil {
+		return "", nil
+	}
+	return url, nil
 }

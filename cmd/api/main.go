@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"file-analyzer/internals/adapters/backblaze"
 	"file-analyzer/internals/adapters/cohere"
 	"file-analyzer/internals/adapters/jwt"
 	"file-analyzer/internals/adapters/qdrant"
@@ -46,6 +47,11 @@ func main() {
 		l.Fatal("Error Initialising Cohere Client ", err)
 	}
 
+	s3Client, err := backblaze.NewS3Client(ctx)
+	if err != nil {
+		l.Fatal("Error Initialising Backblaze Client ", err)
+	}
+
 	exists, err := qClient.CollectionExists(ctx)
 	if err != nil {
 		l.Fatal("Error checking collection:", err)
@@ -71,7 +77,7 @@ func main() {
 
 	tokenService := jwt.NewJwtService(secret)
 
-	server.NewServer(r, qClient, cohereClient, dbClient, l, tokenService)
+	server.NewServer(r, qClient, cohereClient, dbClient, s3Client, l, tokenService)
 
 	s := &http.Server{
 		Addr:         ":3000",

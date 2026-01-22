@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"file-analyzer/internals/adapters/backblaze"
 	"file-analyzer/internals/adapters/cohere"
 	"file-analyzer/internals/adapters/jwt"
 	"file-analyzer/internals/adapters/qdrant"
@@ -23,18 +24,18 @@ type Server struct {
 	logger *log.Logger
 }
 
-func NewServer(router *chi.Mux, qdrantClient qdrant.VectorStore, embedder cohere.Embedder, userRepo repo.UserRepository, logger *log.Logger, tokenService jwt.TokenService) *Server {
+func NewServer(router *chi.Mux, qdrantClient qdrant.VectorStore, embedder cohere.Embedder, userRepo repo.UserRepository, s3Client backblaze.S3Store, logger *log.Logger, tokenService jwt.TokenService) *Server {
 	s := &Server{
 		router: router,
 		logger: logger,
 	}
-	s.routes(qdrantClient, embedder, tokenService, userRepo)
+	s.routes(qdrantClient, embedder, s3Client, tokenService, userRepo)
 	return s
 }
 
-func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedder, tokenService jwt.TokenService, userRepo repo.UserRepository) {
+func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedder, s3Client backblaze.S3Store, tokenService jwt.TokenService, userRepo repo.UserRepository) {
 	// services
-	fileService := services.NewFileService(qdrantClient, embedder)
+	fileService := services.NewFileService(qdrantClient, embedder, s3Client)
 	askService := services.NewAskService(qdrantClient, embedder)
 	authService := services.NewAuthService(userRepo, tokenService)
 
@@ -59,6 +60,7 @@ func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedde
 		r.Group(func(r chi.Router) {
 			r.Post("/auth/login", authHandler.LoginHandler)
 			r.Post("/auth/register", authHandler.RegisterHandler)
+			r.Post("/auth/refresh", authHandler.RefreshHandler)
 		})
 
 		// PRIVATE ROUTES GROUP
@@ -72,10 +74,10 @@ func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedde
 
 			// DOC ROUTES
 			r.Post("/ask/{docId}", askHandler.AskHandler)
-
-			r.Post("/auth/refresh", authHandler.RefreshHandler)
-
 			r.Post("/upload", userFileHandler.FileHandler)
+
+			// Presigned URL
+			r.Post("/generate", userFileHandler.GenerateHandler)
 		})
 
 	})

@@ -67,7 +67,12 @@ func (h *AuthHandler) RefreshHandler(w http.ResponseWriter, r *http.Request) {
 		h.l.Println("Error Reading Refresh Token")
 		utils.FAIL(w, http.StatusBadRequest, "Internal Server Error")
 	}
-	token, err := h.service.Refresh(incomingRefreshToken.Name)
+	token, err := h.service.Refresh(incomingRefreshToken.Value)
+	if err != nil {
+		h.l.Println("Token Refresh Failed ", err.Error())
+		utils.FAIL(w, http.StatusInternalServerError, "Token Refresh Failed")
+		return
+	}
 	SetCookie(r, w, "refresh_token", token.RefreshToken, 7*24*time.Hour)
 	utils.SUCCESS(w, "Token Refreshed Successfully", dto.LoginResponse{
 		AccessToken: token.AccessToken,

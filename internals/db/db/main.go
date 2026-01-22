@@ -72,7 +72,7 @@ func (dbClient *DBClient) FindUserByToken(tokenHash string) (domain.RefreshToken
 		`
 	err := dbClient.db.
 		QueryRow(query, tokenHash).
-		Scan(token.ID, &token.UserID, &token.ExpiresAt, &token.RevokedAt)
+		Scan(&token.ID, &token.UserID, &token.ExpiresAt, &token.RevokedAt)
 	if err != nil {
 		return domain.RefreshToken{}, err
 	}
