@@ -106,3 +106,20 @@ func (dbClient *DBClient) RevokeRefreshToken(oldTokenID int64, newTokenID int64)
 	_, err := dbClient.db.Exec(query, newTokenID, oldTokenID)
 	return err
 }
+
+func (dbClient *DBClient) InsertDoc(docID string, doc domain.Document) error {
+	query := `
+	INSERT INTO documents (user_id,doc_id,name,object_key,status,mime_type,doc_size) VALUES($1,$2,$3,$4,$5,$6,$7) 
+	`
+	_, err := dbClient.db.Exec(query, doc.UserID, doc.DocID, doc.Name, doc.ObjectKey, doc.Status, doc.Mime_Type, doc.DocSize)
+	return err
+}
+
+func (dbClient *DBClient) UpdateDocStatus(docID string, status string) error {
+	query := `UPDATE documents SET status= $1 WHERE doc_id = $2`
+	_, err := dbClient.db.Exec(query)
+	if err != nil {
+		return err
+	}
+	return nil
+}

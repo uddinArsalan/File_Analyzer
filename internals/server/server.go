@@ -35,7 +35,7 @@ func NewServer(router *chi.Mux, qdrantClient qdrant.VectorStore, embedder cohere
 
 func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedder, s3Client backblaze.S3Store, tokenService jwt.TokenService, userRepo repo.UserRepository) {
 	// services
-	fileService := services.NewFileService(qdrantClient, embedder, s3Client)
+	fileService := services.NewFileService(s3Client, userRepo)
 	askService := services.NewAskService(qdrantClient, embedder)
 	authService := services.NewAuthService(userRepo, tokenService)
 
@@ -74,7 +74,6 @@ func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedde
 
 			// DOC ROUTES
 			r.Post("/ask/{docId}", askHandler.AskHandler)
-			r.Post("/upload", userFileHandler.FileHandler)
 
 			// Presigned URL
 			r.Post("/generate", userFileHandler.GenerateHandler)

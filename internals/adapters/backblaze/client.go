@@ -2,7 +2,7 @@ package backblaze
 
 import (
 	"context"
-	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -13,6 +13,7 @@ import (
 
 type S3Client struct {
 	ps *s3.PresignClient
+	sc *s3.Client
 }
 
 func NewS3Client(ctx context.Context) (*S3Client, error) {
@@ -43,19 +44,31 @@ func NewS3Client(ctx context.Context) (*S3Client, error) {
 		o.UsePathStyle = true
 	})
 	presignClient := s3.NewPresignClient(client)
-	return &S3Client{ps: presignClient}, nil
+	return &S3Client{ps: presignClient, sc: client}, nil
 }
 
-func (s3C *S3Client) GeneratePresignedURL(ctx context.Context, userId string, fileName string) (string, error) {
-	key := fmt.Sprintf("documents/%v/%v", userId, fileName)
+func (s3C *S3Client) GeneratePresignedURL(ctx context.Context, objectKey string) (string, error) {
 	bucketName := os.Getenv("BUCKET_NAME")
 	req, err := s3C.ps.PresignPutObject(ctx, &s3.PutObjectInput{
-		Bucket:  aws.String(bucketName),
-		Key:     aws.String(key),
-		Expires: aws.Time(time.Now().Add(5 * time.Minute)),
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(objectKey),
 	}, s3.WithPresignExpires(5*time.Minute))
 	if err != nil {
 		return "", err
 	}
 	return req.URL, nil
+}
+
+func (s3C *S3Client) GetObjectStream(ctx context.Context, key string) (io.ReadCloser, error) {
+	bucketName := os.Getenv("BUCKET_NAME")
+
+	res, err := s3C.sc.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return res.Body, nil
 }

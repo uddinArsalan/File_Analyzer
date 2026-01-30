@@ -9,5 +9,5 @@ import (
 
 type Embedder interface {
 	GenerateEmbedding(ctx context.Context, text []string, inputType cohere.EmbedInputType) (*cohere.EmbedByTypeResponse, error)
-	ProcessChunks(ctx context.Context, userId, docId string, chunksText []string) ([]*qdrant.PointStruct, error)
+	ProcessChunks(ctx context.Context, userId int64, docId string, chunksText []string) ([]*qdrant.PointStruct, error)
 }

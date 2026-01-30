@@ -1,7 +1,11 @@
 package backblaze
 
-import "context"
+import (
+	"context"
+	"io"
+)
 
 type S3Store interface {
-	GeneratePresignedURL(ctx context.Context, userId string, fileName string) (string, error)
+	GeneratePresignedURL(ctx context.Context, objectKey string) (string, error)
+	GetObjectStream(ctx context.Context, key string) (io.ReadCloser, error)
 }
