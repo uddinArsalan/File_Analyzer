@@ -1,0 +1,8 @@
+ALTER TABLE DOCUMENTS 
+    ADD COLUMN doc_id UUID UNIQUE NOT NULL,
+    ADD COLUMN object_key TEXT NOT NULL,
+    ADD COLUMN status TEXT NOT NULL DEFAULT 'PENDING',
+    ADD COLUMN mime_type TEXT,
+    DROP COLUMN doc_url;
+   
+    

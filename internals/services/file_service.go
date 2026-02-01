@@ -2,76 +2,69 @@ package services
 
 import (
 	"context"
-	llm "file-analyzer/internals/adapters/cohere"
-	"file-analyzer/internals/adapters/qdrant"
-	"io"
-	"mime/multipart"
-
-	"strings"
-
-	"github.com/google/uuid"
+	"file-analyzer/internals/adapters/backblaze"
+	"file-analyzer/internals/domain"
+	"file-analyzer/internals/handlers/dto"
+	repo "file-analyzer/internals/repository"
+	// "file-analyzer/queue"
+	"fmt"
+	// "github.com/google/uuid"
 )
 
 type FileService struct {
-	vector qdrant.VectorStore
-	llm    llm.Embedder
+	s3Client backblaze.S3Store
+	users    repo.UserRepository
 }
 
-func NewFileService(vector qdrant.VectorStore,
-	llm llm.Embedder) *FileService {
+func NewFileService(s3Client backblaze.S3Store, users repo.UserRepository) *FileService {
 	return &FileService{
-		vector: vector,
-		llm:    llm,
+		s3Client: s3Client,
+		users:    users,
 	}
 }
 
-func (f *FileService) UploadAndProcess(ctx context.Context, file multipart.File, userId string) (string, error) {
-	// generate doc id (unique) for each document
-	docId := uuid.New().String()
-
-	const (
-		maxChunks  = 96
-		chunkSize  = 400
-		bufferSize = 4096
-	)
-
-	var (
-		buff        = make([]byte, bufferSize)
-		builder     strings.Builder
-		chunkBuffer []string
-	)
-	for {
-		n, err := file.Read(buff)
-		if n > 0 {
-			builder.Write(buff[:n])
-			if builder.Len() >= chunkSize {
-				chunkBuffer = append(chunkBuffer, builder.String())
-				builder.Reset()
-			}
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return "", err
-		}
+func (f *FileService) CheckExistence(ctx context.Context, userID int64, docID string) error {
+	err := f.users.DocumentExistsForUser(userID, docID)
+	if err != nil {
+		return ErrDocumentNotFound
 	}
-	if builder.Len() > 0 {
-		chunkBuffer = append(chunkBuffer, builder.String())
-		builder.Reset()
+	objectKey := fmt.Sprintf("documents/%v/%v", userID, docID)
+	// head request to object storage to check if file is uploaded
+	isExists, err := f.s3Client.HeadObject(ctx, objectKey)
+	if err != nil {
+		return err
 	}
+	if !isExists {
+		return ErrDocumentNotFound
+	}
+	// job := queue.Job{
+	// 	ID:        uuid.New().String(),
+	// 	ObjectKey: objectKey,
+	// 	UserID:    userID,
+	// 	DocID:     docID,
+	// }
 
-	for i := 0; i < len(chunkBuffer); i += maxChunks {
-		end := min(i+maxChunks, len(chunkBuffer))
-		chunks := chunkBuffer[i:end]
-		points, err := f.llm.ProcessChunks(ctx, userId, docId, chunks)
-		if err != nil {
-			return "", err
-		}
-		// after it store in db (doc id , user id ,file meta info ) maybe
-		if _, err := f.vector.InsertVectorEmbeddings(ctx, points); err != nil {
-			return "", err
-		}
+	return nil
+}
+
+func (f *FileService) GeneratePresignedURL(ctx context.Context, userID int64, docID string, doc dto.DocRequest) (string, error) {
+	objectKey := fmt.Sprintf("documents/%v/%v", userID, docID)
+	docObj := domain.Document{
+		DocID:     docID,
+		UserID:    userID,
+		Name:      doc.FileName,
+		ObjectKey: objectKey,
+		Status:    "PENDING",
+		Mime_Type: doc.MiMeType,
+		DocSize:   int64(doc.FileSize),
 	}
-	return docId, nil
+	err := f.users.InsertDoc(docID, docObj)
+	if err != nil {
+		return "", err
+	}
+	url, err := f.s3Client.GeneratePresignedURL(ctx, objectKey)
+	if err != nil {
+		return "", nil
+	}
+	return url, nil
 }

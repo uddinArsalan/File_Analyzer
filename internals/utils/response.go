@@ -18,8 +18,8 @@ func JSON(w http.ResponseWriter, status int, payload interface{}) {
 	json.NewEncoder(w).Encode(payload)
 }
 
-func SUCCESS(w http.ResponseWriter, successMsg string, data interface{}) {
-	JSON(w, http.StatusOK, ApiResponse{
+func SUCCESS(w http.ResponseWriter, status int, successMsg string, data interface{}) {
+	JSON(w, status, ApiResponse{
 		Success:    true,
 		SuccessMsg: successMsg,
 		Data:       data,
