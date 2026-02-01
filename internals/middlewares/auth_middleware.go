@@ -5,6 +5,7 @@ import (
 	"file-analyzer/internals/services"
 	"file-analyzer/internals/utils"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -28,7 +29,12 @@ func Auth(s services.AuthService) func(next http.Handler) http.Handler {
 				utils.FAIL(w, http.StatusUnauthorized, "Invalid token")
 				return
 			}
-			ctx := context.WithValue(r.Context(), UserID{}, userID)
+			userIDInt,err := strconv.ParseInt(userID,10,64)
+			if err != nil {
+				utils.FAIL(w, http.StatusUnauthorized, "Error converting User ID")
+				return
+			}
+			ctx := context.WithValue(r.Context(), UserID{}, userIDInt)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

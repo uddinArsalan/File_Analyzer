@@ -13,7 +13,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-func main(){
+func main() {
 	// ENV Variables
 	err := godotenv.Load()
 	l := log.New(os.Stdout, "DOC WORKER: ", log.LstdFlags|log.Lshortfile)
@@ -50,6 +50,6 @@ func main(){
 		l.Fatal("Error Initialising Backblaze Client ", err)
 	}
 
-	l.Println(qClient,cohereClient,s3Client)
-
+	d := NewDispatcher(3, 12)
+	d.Start(l, cohereClient, qClient, dbClient, s3Client)
 }

@@ -4,10 +4,8 @@ import (
 	"encoding/json"
 	"file-analyzer/internals/handlers/dto"
 	"file-analyzer/internals/middlewares"
-	"file-analyzer/internals/queue"
 	"file-analyzer/internals/services"
 	"file-analyzer/internals/utils"
-	"fmt"
 	"log"
 	"net/http"
 
@@ -26,38 +24,26 @@ func NewFileHandler(service *services.FileService, l *log.Logger) *UserFileHandl
 	}
 }
 
-func (h *UserFileHandler) ProcessFile(w http.ResponseWriter, r *http.Request){
+func (h *UserFileHandler) CheckExistenceAndProcessFile(w http.ResponseWriter, r *http.Request) {
 	docID := r.URL.Query().Get("doc_id")
 	userID := r.Context().Value(middlewares.UserID{}).(int64)
-	// head request to object storage to check if file is uploaded
-	isExists,err := h.service.CheckExistence(docID,userID)
+	err := h.service.CheckExistence(r.Context(), userID, docID)
 	if err != nil {
-		utils.FAIL(w,http.StatusNotFound,"Unable to verify file status die to storage issue.")
+		utils.FAIL(w, http.StatusNotFound, err.Error())
 		return
 	}
-	if !isExists{
-		utils.FAIL(w,http.StatusNotFound,"File has not been uploaded yet.")
-		return
-	}
-	d := queue.NewDispatcher(3,12)
-	objectKey := fmt.Sprintf("documents/%v/%v", userID, docID)
-	job := queue.Job{
-		ID : uuid.New().String(),
-		ObjectKey: objectKey,
-		UserID: userID,
-		DocID: docID,
-	}
-	d.Submit(job)
-	utils.SUCCESS(w,"File is Processing",nil)
+	utils.SUCCESS(w, http.StatusAccepted, "File is Processing", nil)
 }
 
 func (h *UserFileHandler) GenerateHandler(w http.ResponseWriter, r *http.Request) {
 	var req dto.DocRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
+	
 	if err != nil {
 		utils.FAIL(w, http.StatusBadRequest, "Invalid File Details")
 		return
 	}
+
 	userID := r.Context().Value(middlewares.UserID{}).(int64)
 	docID := uuid.New().String()
 	url, err := h.service.GeneratePresignedURL(r.Context(), userID, docID, req)
@@ -68,8 +54,8 @@ func (h *UserFileHandler) GenerateHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	utils.SUCCESS(w, "Presigned URL Generated Successfully", dto.PresignedResponse{
-		DocID:     docId,
+	utils.SUCCESS(w, http.StatusOK, "Presigned URL Generated Successfully", dto.PresignedResponse{
+		DocID:     docID,
 		UploadURL: url,
 	})
 }

@@ -40,7 +40,7 @@ func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	SetCookie(r, w, "refresh_token", token.RefreshToken, 7*24*time.Hour)
-	utils.SUCCESS(w, "Login Successfully", dto.LoginResponse{
+	utils.SUCCESS(w, http.StatusOK, "Login Successfully", dto.LoginResponse{
 		AccessToken: token.AccessToken,
 	})
 }
@@ -58,7 +58,7 @@ func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		utils.FAIL(w, 500, "Registration failed")
 		return
 	}
-	utils.SUCCESS(w, "Users Registered Successfully", nil)
+	utils.SUCCESS(w, http.StatusOK, "Users Registered Successfully", nil)
 }
 
 func (h *AuthHandler) RefreshHandler(w http.ResponseWriter, r *http.Request) {
@@ -74,7 +74,7 @@ func (h *AuthHandler) RefreshHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	SetCookie(r, w, "refresh_token", token.RefreshToken, 7*24*time.Hour)
-	utils.SUCCESS(w, "Token Refreshed Successfully", dto.LoginResponse{
+	utils.SUCCESS(w, http.StatusOK, "Token Refreshed Successfully", dto.LoginResponse{
 		AccessToken: token.AccessToken,
 	})
 }

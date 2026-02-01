@@ -1,4 +1,4 @@
-package queue
+package processor
 
 import (
 	"bufio"
@@ -7,16 +7,10 @@ import (
 	"file-analyzer/internals/adapters/cohere"
 	"file-analyzer/internals/adapters/qdrant"
 	repo "file-analyzer/internals/repository"
+	"file-analyzer/queue"
 	"io"
 	"strings"
 )
-
-type Job struct {
-	ID        string
-	ObjectKey string
-	UserID    int64
-	DocID     string
-}
 
 type Processor struct {
 	llm    cohere.Embedder
@@ -34,7 +28,7 @@ func NewProcessor(llm cohere.Embedder, vector qdrant.VectorStore, users repo.Use
 	}
 }
 
-func (p *Processor) Process(ctx context.Context, job Job) error {
+func (p *Processor) Process(ctx context.Context, job queue.Job) error {
 	err := p.users.UpdateDocStatus(job.DocID, "PROCESSING")
 	if err != nil {
 		return nil
@@ -46,7 +40,7 @@ func (p *Processor) Process(ctx context.Context, job Job) error {
 	return p.UploadAndProcess(ctx, job, body)
 }
 
-func (p *Processor) UploadAndProcess(ctx context.Context, job Job, body io.ReadCloser) error {
+func (p *Processor) UploadAndProcess(ctx context.Context, job queue.Job, body io.ReadCloser) error {
 
 	reader := bufio.NewReader(body)
 

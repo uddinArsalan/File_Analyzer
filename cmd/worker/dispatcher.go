@@ -1,4 +1,4 @@
-package queue
+package worker
 
 import (
 	"context"
@@ -6,13 +6,14 @@ import (
 	"file-analyzer/internals/adapters/cohere"
 	"file-analyzer/internals/adapters/qdrant"
 	repo "file-analyzer/internals/repository"
+	"file-analyzer/queue"
 	"log"
 	"sync"
 )
 
 type Dispatcher struct {
 	WorkerCount int
-	JobQueue    chan Job
+	JobQueue    chan queue.Job
 	workers     []*Worker
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -24,7 +25,7 @@ func NewDispatcher(workerCount, queueSize int) *Dispatcher {
 
 	return &Dispatcher{
 		WorkerCount: workerCount,
-		JobQueue:    make(chan Job, queueSize),
+		JobQueue:    make(chan queue.Job, queueSize),
 		ctx:         ctx,
 		cancel:      cancel,
 		wg:          &sync.WaitGroup{},
@@ -48,10 +49,6 @@ func (d *Dispatcher) Start(l *log.Logger, llm cohere.Embedder, vector qdrant.Vec
 	}
 }
 
-func (d *Dispatcher) Submit(job Job) {
-	d.wg.Add(1)
-	go func() {
-		d.JobQueue <- job
-		d.wg.Done()
-	}()
+func (d *Dispatcher) Submit(job queue.Job) {
+	d.JobQueue <- job
 }

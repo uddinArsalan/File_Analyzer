@@ -123,3 +123,13 @@ func (dbClient *DBClient) UpdateDocStatus(docID string, status string) error {
 	}
 	return nil
 }
+
+func (dbClient *DBClient) DocumentExistsForUser(userID int64, docID string) error {
+	var res domain.Document
+	query := `SELECT id,doc_id,status FROM documents WHERE user_id = $1 AND doc_id = $2`
+	err := dbClient.db.QueryRow(query, userID, docID).Scan(&res.ID, &res.DocID, &res.Status)
+	if err != nil {
+		return err
+	}
+	return nil
+}

@@ -14,4 +14,5 @@ type UserRepository interface {
 	RevokeRefreshToken(oldTokenID int64, newTokenID int64) error
 	InsertDoc(docID string, doc domain.Document) error
 	UpdateDocStatus(docID string, status string) error
+	DocumentExistsForUser(userID int64, docID string) error
 }

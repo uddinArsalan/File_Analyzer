@@ -41,5 +41,5 @@ func (cc *AskHandler) AskHandler(w http.ResponseWriter, r *http.Request) {
 
 	response, err := cc.service.Ask(q.Question, docId)
 
-	utils.SUCCESS(w, "Ask Successfully", response)
+	utils.SUCCESS(w, http.StatusOK, "Ask Successfully", response)
 }

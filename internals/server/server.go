@@ -69,7 +69,7 @@ func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedde
 
 			r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 				s.logger.Println(r.Context().Value(middlewares.UserID{}))
-				utils.SUCCESS(w, "All good", nil)
+				utils.SUCCESS(w, http.StatusOK, "All good", nil)
 			})
 
 			// DOC ROUTES
@@ -77,6 +77,8 @@ func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedde
 
 			// Presigned URL
 			r.Post("/generate", userFileHandler.GenerateHandler)
+
+			r.Post("/doc/complete", userFileHandler.CheckExistenceAndProcessFile)
 		})
 
 	})

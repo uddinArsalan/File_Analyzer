@@ -1,18 +1,20 @@
-package queue
+package worker
 
 import (
 	"context"
+	"file-analyzer/cmd/worker/processor"
 	"file-analyzer/internals/adapters/backblaze"
 	"file-analyzer/internals/adapters/cohere"
 	"file-analyzer/internals/adapters/qdrant"
 	repo "file-analyzer/internals/repository"
+	"file-analyzer/queue"
 	"log"
 	"time"
 )
 
 type Worker struct {
 	ID      int
-	JobChan chan Job
+	JobChan chan queue.Job
 	ctx     context.Context
 	l       *log.Logger
 	llm     cohere.Embedder
@@ -22,7 +24,7 @@ type Worker struct {
 }
 
 func (w *Worker) Start() {
-	processor := NewProcessor(w.llm, w.vector, w.users, w.object)
+	processor := processor.NewProcessor(w.llm, w.vector, w.users, w.object)
 	w.l.Printf("Worked ID started %d", w.ID)
 	go func() {
 		for {
@@ -40,7 +42,6 @@ func (w *Worker) Start() {
 					}
 
 					jobCtx, cancel := context.WithTimeout(w.ctx, 10*time.Minute)
-
 					err := processor.Process(jobCtx, job)
 					cancel()
 					if err != nil {

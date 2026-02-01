@@ -2,6 +2,7 @@ package backblaze
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -71,4 +72,18 @@ func (s3C *S3Client) GetObjectStream(ctx context.Context, key string) (io.ReadCl
 		return nil, err
 	}
 	return res.Body, nil
+}
+
+func (s3C *S3Client) HeadObject(ctx context.Context, key string) (bool, error) {
+	bucketName := os.Getenv("BUCKET_NAME")
+	res, err := s3C.sc.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return false, err
+	}
+	fmt.Println("Size:", aws.ToInt64(res.ContentLength))
+	fmt.Println("Type:", aws.ToString(res.ContentType))
+	return true, nil
 }
