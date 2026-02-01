@@ -44,7 +44,7 @@ func (cc *UserClient) GenerateEmbedding(ctx context.Context, text []string, inpu
 	return resp, nil
 }
 
-func (cc *UserClient) ProcessChunks(ctx context.Context, userId, docId string, chunksText []string) ([]*qdrant.PointStruct, error) {
+func (cc *UserClient) ProcessChunks(ctx context.Context, userId int64, docId string, chunksText []string) ([]*qdrant.PointStruct, error) {
 
 	// fmt.Printf("Chunks Text int ProcessChunks %v", chunksText)
 	resp, err := cc.GenerateEmbedding(ctx, chunksText, cohere.EmbedInputTypeSearchDocument)
