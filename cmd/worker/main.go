@@ -1,14 +1,17 @@
-package worker
+package main
 
 import (
 	"context"
 	"file-analyzer/internals/adapters/backblaze"
 	"file-analyzer/internals/adapters/cohere"
 	"file-analyzer/internals/adapters/qdrant"
+	"file-analyzer/internals/adapters/redis"
 	"file-analyzer/internals/db/db"
 	"log"
 	"os"
-	"time"
+	"os/signal"
+	"strings"
+	"syscall"
 
 	"github.com/joho/godotenv"
 )
@@ -21,8 +24,8 @@ func main() {
 		l.Fatal("Error loading .env file", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	// DB Connection
 	dbClient, err := db.NewDBConnection(l)
@@ -50,6 +53,27 @@ func main() {
 		l.Fatal("Error Initialising Backblaze Client ", err)
 	}
 
-	d := NewDispatcher(3, 12)
-	d.Start(l, cohereClient, qClient, dbClient, s3Client)
+	rdb, err := redis.NewRedisClient(ctx)
+	if err != nil {
+		l.Fatal(err)
+	}
+
+	if err := rdb.CreateAndCheckStream(ctx); err != nil {
+		if strings.Contains(err.Error(), "BUSYGROUP") {
+			l.Println("BUSYGROUP Consumer group already exists")
+		} else {
+			l.Fatal(err.Error())
+		}
+	}
+
+	d := NewDispatcher(ctx, 3, 12)
+	d.Start(l, cohereClient, qClient, dbClient, s3Client, rdb)
+	// d.StartRedisListener(ctx, l, rdb)
+
+	<-ctx.Done()
+
+	log.Println("Shutting down dispatcher...")
+	d.Stop()
+	log.Println("Graceful shutdown complete")
+
 }
