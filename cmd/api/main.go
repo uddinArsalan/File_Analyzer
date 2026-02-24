@@ -6,6 +6,7 @@ import (
 	"file-analyzer/internals/adapters/cohere"
 	"file-analyzer/internals/adapters/jwt"
 	"file-analyzer/internals/adapters/qdrant"
+	"file-analyzer/internals/adapters/redis"
 	"file-analyzer/internals/db/db"
 	"file-analyzer/internals/server"
 	"log"
@@ -77,7 +78,12 @@ func main() {
 
 	tokenService := jwt.NewJwtService(secret)
 
-	server.NewServer(r, qClient, cohereClient, dbClient, s3Client, l, tokenService)
+	rdb, err := redis.NewRedisClient(ctx)
+	if err != nil {
+		l.Fatal(err)
+	}
+
+	server.NewServer(r, qClient, cohereClient, dbClient, s3Client, l, tokenService, rdb)
 
 	s := &http.Server{
 		Addr:         ":3000",

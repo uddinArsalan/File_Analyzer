@@ -6,6 +6,7 @@ import (
 	"file-analyzer/internals/adapters/cohere"
 	"file-analyzer/internals/adapters/jwt"
 	"file-analyzer/internals/adapters/qdrant"
+	"file-analyzer/internals/adapters/redis"
 	"file-analyzer/internals/handlers"
 	"file-analyzer/internals/middlewares"
 	repo "file-analyzer/internals/repository"
@@ -24,24 +25,29 @@ type Server struct {
 	logger *log.Logger
 }
 
-func NewServer(router *chi.Mux, qdrantClient qdrant.VectorStore, embedder cohere.Embedder, userRepo repo.UserRepository, s3Client backblaze.S3Store, logger *log.Logger, tokenService jwt.TokenService) *Server {
+func NewServer(router *chi.Mux, qdrantClient qdrant.VectorStore, embedder cohere.Embedder, userRepo repo.UserRepository, s3Client backblaze.S3Store, logger *log.Logger, tokenService jwt.TokenService, cache redis.CacheStore) *Server {
 	s := &Server{
 		router: router,
 		logger: logger,
 	}
-	s.routes(qdrantClient, embedder, s3Client, tokenService, userRepo)
+	s.routes(qdrantClient, embedder, s3Client, tokenService, userRepo, cache)
 	return s
 }
 
-func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedder, s3Client backblaze.S3Store, tokenService jwt.TokenService, userRepo repo.UserRepository) {
+func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedder, s3Client backblaze.S3Store, tokenService jwt.TokenService, userRepo repo.UserRepository, cache redis.CacheStore) {
 	// services
-	fileService := services.NewFileService(s3Client, userRepo)
+	fileService := services.NewFileService(s3Client, userRepo, cache)
 	askService := services.NewAskService(qdrantClient, embedder)
 	authService := services.NewAuthService(userRepo, tokenService)
 
 	userFileHandler := handlers.NewFileHandler(fileService, s.logger)
 	askHandler := handlers.NewAskHandler(askService, s.logger)
 	authHandler := handlers.NewAuthHandler(s.logger, authService)
+
+	// temp service
+	tempService := services.NewTempService(cache)
+	// tempHandler
+	tempHandler := handlers.NewTempHandler(s.logger, tempService)
 
 	// CORS
 	var allowedOrigins []string
@@ -61,6 +67,7 @@ func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedde
 			r.Post("/auth/login", authHandler.LoginHandler)
 			r.Post("/auth/register", authHandler.RegisterHandler)
 			r.Post("/auth/refresh", authHandler.RefreshHandler)
+			r.Post("/post-jobs", tempHandler.Add)
 		})
 
 		// PRIVATE ROUTES GROUP
@@ -82,5 +89,4 @@ func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedde
 		})
 
 	})
-
 }
