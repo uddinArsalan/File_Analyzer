@@ -3,23 +3,28 @@ package services
 import (
 	"context"
 	"file-analyzer/internals/adapters/backblaze"
+	"file-analyzer/internals/adapters/redis"
 	"file-analyzer/internals/domain"
 	"file-analyzer/internals/handlers/dto"
 	repo "file-analyzer/internals/repository"
+	"file-analyzer/queue"
 	// "file-analyzer/queue"
 	"fmt"
+	"github.com/google/uuid"
 	// "github.com/google/uuid"
 )
 
 type FileService struct {
 	s3Client backblaze.S3Store
 	users    repo.UserRepository
+	cache    redis.CacheStore
 }
 
-func NewFileService(s3Client backblaze.S3Store, users repo.UserRepository) *FileService {
+func NewFileService(s3Client backblaze.S3Store, users repo.UserRepository, cache redis.CacheStore) *FileService {
 	return &FileService{
-		s3Client: s3Client,
-		users:    users,
+		s3Client,
+		users,
+		cache,
 	}
 }
 
@@ -37,13 +42,13 @@ func (f *FileService) CheckExistence(ctx context.Context, userID int64, docID st
 	if !isExists {
 		return ErrDocumentNotFound
 	}
-	// job := queue.Job{
-	// 	ID:        uuid.New().String(),
-	// 	ObjectKey: objectKey,
-	// 	UserID:    userID,
-	// 	DocID:     docID,
-	// }
-
+	job := &queue.Job{
+		ID:        uuid.New().String(),
+		ObjectKey: objectKey,
+		UserID:    userID,
+		DocID:     docID,
+	}
+	f.cache.EnqueueJob(ctx, job)
 	return nil
 }
 
