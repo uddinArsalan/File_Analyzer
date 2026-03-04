@@ -38,7 +38,7 @@ func (h *UserFileHandler) CheckExistenceAndProcessFile(w http.ResponseWriter, r 
 func (h *UserFileHandler) GenerateHandler(w http.ResponseWriter, r *http.Request) {
 	var req dto.DocRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
-	
+
 	if err != nil {
 		utils.FAIL(w, http.StatusBadRequest, "Invalid File Details")
 		return

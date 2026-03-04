@@ -29,7 +29,7 @@ func NewFileService(s3Client backblaze.S3Store, users repo.UserRepository, cache
 }
 
 func (f *FileService) CheckExistence(ctx context.Context, userID int64, docID string) error {
-	err := f.users.DocumentExistsForUser(userID, docID)
+	doc, err := f.users.DocumentExistsForUser(userID, docID)
 	if err != nil {
 		return ErrDocumentNotFound
 	}
@@ -47,6 +47,7 @@ func (f *FileService) CheckExistence(ctx context.Context, userID int64, docID st
 		ObjectKey: objectKey,
 		UserID:    userID,
 		DocID:     docID,
+		Mime_Type: doc.Mime_Type,
 	}
 	f.cache.EnqueueJob(ctx, job)
 	return nil

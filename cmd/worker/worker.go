@@ -2,20 +2,18 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"strconv"
-	"time"
-
-	// "file-analyzer/cmd/worker/processor"
+	"file-analyzer/cmd/worker/processor"
 	"file-analyzer/internals/adapters/backblaze"
 	"file-analyzer/internals/adapters/cohere"
 	"file-analyzer/internals/adapters/qdrant"
 	"file-analyzer/internals/adapters/redis"
 	repo "file-analyzer/internals/repository"
 	"file-analyzer/queue"
+	"fmt"
 	"log"
+	"strconv"
 	"sync"
-	// "time"
+	"time"
 )
 
 type Worker struct {
@@ -67,9 +65,15 @@ func (w *Worker) Start() {
 								UserID:    userID,
 								ObjectKey: msg.Values["object_key"].(string),
 								DocID:     msg.Values["doc_id"].(string),
+								Mime_Type: msg.Values["mime_type"].(string),
 							}
 							// process job
 							w.l.Printf("JOB %v", job)
+							processor := processor.NewProcessor(job, w.llm, w.vector, w.users, w.object)
+							err = processor.Process(w.ctx, w.l)
+							if err != nil {
+								continue
+							}
 							// if success
 							// send acknowledgement use XACK
 							if err := w.cache.SendAck(w.ctx, msg.ID); err != nil {
