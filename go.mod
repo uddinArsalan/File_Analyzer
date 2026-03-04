@@ -1,6 +1,6 @@
 module file-analyzer
 
-go 1.24.0
+go 1.24.1
 
 require (
 	github.com/cohere-ai/cohere-go/v2 v2.16.0
@@ -31,6 +31,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.41.6 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
+	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728 // indirect
 	github.com/lib/pq v1.10.9 // indirect
 	github.com/redis/go-redis/v9 v9.17.3 // indirect
 	golang.org/x/crypto v0.46.0 // indirect

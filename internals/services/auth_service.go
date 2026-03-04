@@ -46,7 +46,7 @@ func (s *AuthService) Login(email, password string) (*AuthTokens, error) {
 	if err != nil {
 		return &AuthTokens{}, ErrInvalidCredentials
 	}
-	accessToken, err := s.jwt.GenerateJWT(user.UserID, 5*time.Minute)
+	accessToken, err := s.jwt.GenerateJWT(user.UserID, 60*time.Minute)
 	if err != nil {
 		return &AuthTokens{}, err
 	}
@@ -95,7 +95,7 @@ func (s *AuthService) Refresh(incomingToken string) (*AuthTokens, error) {
 	if err != nil {
 		return &AuthTokens{}, err
 	}
-	accessToken, err := s.jwt.GenerateJWT(oldToken.UserID, 5*time.Minute)
+	accessToken, err := s.jwt.GenerateJWT(oldToken.UserID, 60*time.Minute)
 	if err != nil {
 		return &AuthTokens{}, err
 	}

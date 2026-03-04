@@ -44,6 +44,7 @@ func (redisClient *RedisClient) EnqueueJob(ctx context.Context, job *queue.Job) 
 		"object_key": job.ObjectKey,
 		"user_id":    job.UserID,
 		"doc_id":     job.DocID,
+		"mime_type":  job.Mime_Type,
 	}
 	res, err := redisClient.rdb.XAdd(ctx, &redis.XAddArgs{
 		ID:     "*",
