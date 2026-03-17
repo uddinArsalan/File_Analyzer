@@ -92,5 +92,6 @@ func SetCookie(r *http.Request, w http.ResponseWriter, name string, value string
 }
 
 func DecodeJSON[T *dto.LoginRequest | *dto.RegisterRequest](r *http.Request, dst T) error {
+	defer r.Body.Close()
 	return json.NewDecoder(r.Body).Decode(dst)
 }

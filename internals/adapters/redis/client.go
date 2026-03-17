@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"file-analyzer/internals/domain"
 	"file-analyzer/queue"
 	"fmt"
 	"os"
@@ -14,6 +15,7 @@ type RedisClient struct {
 	rdb           *redis.Client
 	streamName    string
 	consumerGroup string
+	channelName   string
 }
 
 func NewRedisClient(ctx context.Context) (*RedisClient, error) {
@@ -31,6 +33,7 @@ func NewRedisClient(ctx context.Context) (*RedisClient, error) {
 		rdb:           rdb,
 		streamName:    os.Getenv("REDIS_STREAM"),
 		consumerGroup: os.Getenv("REDIS_CONSUMER_GROUP"),
+		channelName:   os.Getenv("REDIS_EVENT_CHANNEL"),
 	}, nil
 }
 
@@ -91,4 +94,12 @@ func (redisClient *RedisClient) CreateAndCheckStream(parent context.Context) err
 func (redisClient *RedisClient) SendAck(ctx context.Context, id string) error {
 	_, err := redisClient.rdb.XAck(ctx, redisClient.streamName, redisClient.consumerGroup, id).Result()
 	return err
+}
+
+func (redisClient *RedisClient) PublishEvent(ctx context.Context, message domain.DocEvent) {
+	redisClient.rdb.Publish(ctx, redisClient.channelName, message)
+}
+
+func (redisClient *RedisClient) Subscribe(ctx context.Context) *redis.PubSub {
+	return redisClient.rdb.Subscribe(ctx, redisClient.channelName)
 }

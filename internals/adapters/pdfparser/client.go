@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"file-analyzer/internals/domain"
 	"io"
-	"os"
+	"strings"
 
 	"github.com/ledongthuc/pdf"
 )
@@ -16,41 +16,40 @@ func NewPdfParser() *PdfParser {
 	return &PdfParser{}
 }
 
-func (pd *PdfParser) Parse(stream io.Reader) (domain.DocumentParseResult, error) {
-	// creating temp file from stream
-	out, err := os.Create("file.pdf")
+func (pd *PdfParser) Parse(stream io.Reader, size int64) (domain.DocumentParseResult, error) {
+	data, err := io.ReadAll(stream)
 	if err != nil {
-		return domain.DocumentParseResult{
-			Content: "",
-		}, err
-	}
-	defer out.Close()
-	_, err = io.Copy(out, stream)
-	if err != nil {
-		return domain.DocumentParseResult{
-			Content: "",
-		}, err
+		return domain.DocumentParseResult{}, err
 	}
 
-	// Reading content from file
+	readerAt := bytes.NewReader(data)
+
+	pdfReader, err := pdf.NewReader(readerAt, int64(len(data)))
+
 	pdf.DebugOn = true
-	f, r, err := pdf.Open("./file.pdf")
 	if err != nil {
 		return domain.DocumentParseResult{
 			Content: "",
 		}, err
 	}
 
-	defer f.Close()
-	var buf bytes.Buffer
-	b, err := r.GetPlainText()
-	if err != nil {
-		panic(err)
+	var str strings.Builder
+
+	totalPage := pdfReader.NumPage()
+	for pageIndex := 1; pageIndex <= totalPage; pageIndex++ {
+		p := pdfReader.Page(pageIndex)
+		if p.V.IsNull() || p.V.Key("Contents").Kind() == pdf.Null {
+			continue
+		}
+		content, err := p.GetPlainText(nil)
+		if err != nil {
+			continue
+		}
+
+		str.WriteString(content)
 	}
-	buf.ReadFrom(b)
-	content := buf.String()
 
 	return domain.DocumentParseResult{
-		Content: content,
+		Content: str.String(),
 	}, nil
 }

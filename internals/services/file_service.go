@@ -28,6 +28,7 @@ func NewFileService(s3Client backblaze.S3Store, users repo.UserRepository, cache
 	}
 }
 
+// Consider idempotency
 func (f *FileService) CheckExistence(ctx context.Context, userID int64, docID string) error {
 	doc, err := f.users.DocumentExistsForUser(userID, docID)
 	if err != nil {
@@ -48,9 +49,12 @@ func (f *FileService) CheckExistence(ctx context.Context, userID int64, docID st
 		UserID:    userID,
 		DocID:     docID,
 		Mime_Type: doc.Mime_Type,
+		Size:      doc.DocSize,
 	}
-	f.cache.EnqueueJob(ctx, job)
-	return nil
+	if err := f.cache.EnqueueJob(ctx, job); err != nil {
+		return err
+	}
+	return f.users.UpdateDocStatus(docID, "PROCESSING")
 }
 
 func (f *FileService) GeneratePresignedURL(ctx context.Context, userID int64, docID string, doc dto.DocRequest) (string, error) {

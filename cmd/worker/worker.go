@@ -43,7 +43,6 @@ func (w *Worker) Start() {
 			default:
 				{
 					workerName := fmt.Sprintf("Worker #%d", w.ID)
-					w.l.Printf("JOB PICKED BY %v", workerName)
 					streams, err := w.cache.ReadJobByConsumer(w.ctx, workerName)
 
 					if err != nil {
@@ -52,12 +51,25 @@ func (w *Worker) Start() {
 						continue
 					}
 
+					if len(streams) == 0 {
+						time.Sleep(500 * time.Millisecond)
+						continue
+					}
+
+					w.l.Printf("Job picked by %s", workerName)
+
 					for _, stream := range streams {
 						for _, msg := range stream.Messages {
-							userIDStr := msg.Values["user_id"].(string)
+							userIDStr, ok := msg.Values["user_id"].(string)
+							if !ok {
+								w.l.Printf("Worker #%d: missing or invalid user_id in msg %s", w.ID, msg.ID)
+								w.cache.SendAck(w.ctx, msg.ID)
+								continue
+							}
 							userID, err := strconv.ParseInt(userIDStr, 10, 64)
 							if err != nil {
-								w.l.Println("invalid user_id:", err)
+								w.l.Printf("Worker #%d: invalid user_id %q: %v", w.ID, userIDStr, err)
+								w.cache.SendAck(w.ctx, msg.ID)
 								continue
 							}
 							job := queue.Job{
@@ -68,8 +80,8 @@ func (w *Worker) Start() {
 								Mime_Type: msg.Values["mime_type"].(string),
 							}
 							// process job
-							w.l.Printf("JOB %v", job)
-							processor := processor.NewProcessor(job, w.llm, w.vector, w.users, w.object)
+							w.l.Printf("Processing job %v for worker %v", job, workerName)
+							processor := processor.NewProcessor(job, w.llm, w.vector, w.users, w.object,w.cache)
 							err = processor.Process(w.ctx, w.l)
 							if err != nil {
 								continue

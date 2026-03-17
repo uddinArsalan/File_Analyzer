@@ -77,7 +77,7 @@ func (qClient *QdrantClient) SearchEmbedInDocument(ctx context.Context, embeddin
 	}
 	// threshold := float32(0.75)
 	res, err := qClient.client.Query(ctx, &qdrant.QueryPoints{
-		CollectionName: "documents",
+		CollectionName: qClient.collectionName,
 		Query:          qdrant.NewQueryDense(embed),
 		Filter: &qdrant.Filter{
 			Must: []*qdrant.Condition{
