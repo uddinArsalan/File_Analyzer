@@ -9,6 +9,8 @@ import (
 	"file-analyzer/internals/adapters/redis"
 	"file-analyzer/internals/db/db"
 	"file-analyzer/internals/server"
+	"file-analyzer/internals/sse"
+	"file-analyzer/internals/subscriber"
 	"log"
 	"net/http"
 	"os"
@@ -82,8 +84,14 @@ func main() {
 	if err != nil {
 		l.Fatal(err)
 	}
+	sseManager := sse.NewSSEManager()
+	subs := []subscriber.Subscriber{
+		sseManager,
+	}
 
-	server.NewServer(r, qClient, cohereClient, dbClient, s3Client, l, tokenService, rdb)
+	go rdb.SubscribeAndListen(ctx, subs)
+
+	server.NewServer(r, qClient, cohereClient, dbClient, s3Client, l, tokenService, rdb,sseManager)
 
 	s := &http.Server{
 		Addr:         ":3000",

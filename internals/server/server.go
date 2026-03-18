@@ -11,6 +11,7 @@ import (
 	"file-analyzer/internals/middlewares"
 	repo "file-analyzer/internals/repository"
 	"file-analyzer/internals/services"
+	"file-analyzer/internals/sse"
 	"file-analyzer/internals/utils"
 	"log"
 	"net/http"
@@ -25,18 +26,18 @@ type Server struct {
 	logger *log.Logger
 }
 
-func NewServer(router *chi.Mux, qdrantClient qdrant.VectorStore, embedder cohere.Embedder, userRepo repo.UserRepository, s3Client backblaze.S3Store, logger *log.Logger, tokenService jwt.TokenService, cache redis.CacheStore) *Server {
+func NewServer(router *chi.Mux, qdrantClient qdrant.VectorStore, embedder cohere.Embedder, userRepo repo.UserRepository, s3Client backblaze.S3Store, logger *log.Logger, tokenService jwt.TokenService, cache redis.CacheStore, sse *sse.SSEManager) *Server {
 	s := &Server{
 		router: router,
 		logger: logger,
 	}
-	s.routes(qdrantClient, embedder, s3Client, tokenService, userRepo, cache)
+	s.routes(qdrantClient, embedder, s3Client, tokenService, userRepo, cache, sse)
 	return s
 }
 
-func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedder, s3Client backblaze.S3Store, tokenService jwt.TokenService, userRepo repo.UserRepository, cache redis.CacheStore) {
+func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedder, s3Client backblaze.S3Store, tokenService jwt.TokenService, userRepo repo.UserRepository, cache redis.CacheStore, sse *sse.SSEManager) {
 	// services
-	fileService := services.NewFileService(s3Client, userRepo, cache)
+	fileService := services.NewFileService(s3Client, userRepo, cache, sse)
 	askService := services.NewAskService(qdrantClient, embedder)
 	authService := services.NewAuthService(userRepo, tokenService)
 

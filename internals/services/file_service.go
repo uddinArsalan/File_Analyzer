@@ -7,9 +7,13 @@ import (
 	"file-analyzer/internals/domain"
 	"file-analyzer/internals/handlers/dto"
 	repo "file-analyzer/internals/repository"
+	"file-analyzer/internals/sse"
 	"file-analyzer/queue"
+	"net/http"
+
 	// "file-analyzer/queue"
 	"fmt"
+
 	"github.com/google/uuid"
 	// "github.com/google/uuid"
 )
@@ -18,13 +22,15 @@ type FileService struct {
 	s3Client backblaze.S3Store
 	users    repo.UserRepository
 	cache    redis.CacheStore
+	sse      *sse.SSEManager
 }
 
-func NewFileService(s3Client backblaze.S3Store, users repo.UserRepository, cache redis.CacheStore) *FileService {
+func NewFileService(s3Client backblaze.S3Store, users repo.UserRepository, cache redis.CacheStore, sse *sse.SSEManager) *FileService {
 	return &FileService{
 		s3Client,
 		users,
 		cache,
+		sse,
 	}
 }
 
@@ -77,4 +83,24 @@ func (f *FileService) GeneratePresignedURL(ctx context.Context, userID int64, do
 		return "", nil
 	}
 	return url, nil
+}
+
+func (f *FileService) Stream(ctx context.Context, userID int64, flusher http.Flusher, w http.ResponseWriter) {
+	ch := f.sse.AddClient(userID)
+
+	defer f.sse.RemoveClient(userID)
+
+	for {
+		select {
+		case event := <-ch:
+			{
+				fmt.Fprintf(w, "data: %s\n\n", event.Status)
+				flusher.Flush()
+			}
+		case <-ctx.Done():
+			{
+				return
+			}
+		}
+	}
 }

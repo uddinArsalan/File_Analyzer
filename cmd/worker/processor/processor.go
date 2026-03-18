@@ -94,7 +94,10 @@ func (p *Processor) Process(ctx context.Context, l *log.Logger) error {
 		Status: "COMPLETED",
 		UserID: p.job.UserID,
 	}
-	p.cache.PublishEvent(ctx, event)
+	err = p.cache.PublishEvent(ctx, event)
+	if err != nil {
+		l.Printf("Error Publishing event: %v", err)
+	}
 
 	// The API server listens for this event and notifies the frontend via SSE,
 	// so the user knows the file is ready and can start asking questions.

@@ -6,10 +6,9 @@ import (
 	"file-analyzer/internals/middlewares"
 	"file-analyzer/internals/services"
 	"file-analyzer/internals/utils"
+	"github.com/google/uuid"
 	"log"
 	"net/http"
-
-	"github.com/google/uuid"
 )
 
 type UserFileHandler struct {
@@ -58,4 +57,20 @@ func (h *UserFileHandler) GenerateHandler(w http.ResponseWriter, r *http.Request
 		DocID:     docID,
 		UploadURL: url,
 	})
+}
+
+func (h *UserFileHandler) SSEHandler(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(middlewares.UserID{}).(int64)
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		utils.FAIL(w, http.StatusInternalServerError, "Streaming not Supported")
+		return
+	}
+
+	h.service.Stream(r.Context(), userID, flusher, w)
 }

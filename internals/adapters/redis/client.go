@@ -2,7 +2,9 @@ package redis
 
 import (
 	"context"
+	"encoding/json"
 	"file-analyzer/internals/domain"
+	"file-analyzer/internals/subscriber"
 	"file-analyzer/queue"
 	"fmt"
 	"os"
@@ -96,10 +98,24 @@ func (redisClient *RedisClient) SendAck(ctx context.Context, id string) error {
 	return err
 }
 
-func (redisClient *RedisClient) PublishEvent(ctx context.Context, message domain.DocEvent) {
-	redisClient.rdb.Publish(ctx, redisClient.channelName, message)
+func (redisClient *RedisClient) PublishEvent(ctx context.Context, message domain.DocEvent) error {
+	return redisClient.rdb.Publish(ctx, redisClient.channelName, message).Err()
 }
 
-func (redisClient *RedisClient) Subscribe(ctx context.Context) *redis.PubSub {
-	return redisClient.rdb.Subscribe(ctx, redisClient.channelName)
+func (redisClient *RedisClient) SubscribeAndListen(ctx context.Context, subscribers []subscriber.Subscriber) error {
+	pubsub := redisClient.rdb.Subscribe(ctx, redisClient.channelName)
+	ch := pubsub.Channel()
+
+	for msg := range ch {
+		for _, sub := range subscribers {
+			var event domain.DocEvent
+			err := json.Unmarshal([]byte(msg.Payload), &event)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Received message: %s", event)
+			sub.Notify(event)
+		}
+	}
+	return nil
 }
