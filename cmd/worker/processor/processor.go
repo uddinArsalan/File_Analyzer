@@ -58,12 +58,12 @@ func (p *Processor) Process(ctx context.Context, l *log.Logger) error {
 		return err
 	}
 
-	l.Printf("Parsed content length: %d", len(content.Content))
+	// l.Printf("Parsed content length: %d", len(content.Content))
 
 	// 2. Chunking
 	chunker := chunker.NewChunker(content.Content, p.job.DocID, p.job.UserID)
 	chunks := chunker.Chunk()
-	l.Printf("Chunks: %+v\n", chunks)
+	// l.Printf("Chunks: %+v\n", chunks)
 
 	// 3. Embedding
 
@@ -72,7 +72,7 @@ func (p *Processor) Process(ctx context.Context, l *log.Logger) error {
 		l.Printf("Embedding failed: %v", err)
 		return err
 	}
-	l.Printf("Points: %+v\n", points)
+	// l.Printf("Points: %+v\n", points)
 
 	// 3. Adding in Vector Store each embedding wit
 	_, err = p.vector.InsertVectorEmbeddings(ctx, points)

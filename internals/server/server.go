@@ -46,9 +46,9 @@ func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedde
 	authHandler := handlers.NewAuthHandler(s.logger, authService)
 
 	// temp service
-	tempService := services.NewTempService(cache)
+	// tempService := services.NewTempService(cache)
 	// tempHandler
-	tempHandler := handlers.NewTempHandler(s.logger, tempService)
+	// tempHandler := handlers.NewTempHandler(s.logger, tempService)
 
 	// CORS
 	var allowedOrigins []string
@@ -56,7 +56,8 @@ func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedde
 		s.logger.Println("invalid ALLOWED_ORIGINS_JSON", err)
 	}
 
-	s.router.Group(func(r chi.Router) {
+	s.router.Route("/api/v1", func(r chi.Router) {
+
 		r.Use(cors.Handler(cors.Options{
 			AllowedOrigins:   allowedOrigins,
 			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -68,7 +69,7 @@ func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedde
 			r.Post("/auth/login", authHandler.LoginHandler)
 			r.Post("/auth/register", authHandler.RegisterHandler)
 			r.Post("/auth/refresh", authHandler.RefreshHandler)
-			r.Post("/post-jobs", tempHandler.Add)
+			// r.Post("/post-jobs", tempHandler.Add)
 		})
 
 		// PRIVATE ROUTES GROUP
@@ -87,6 +88,8 @@ func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedde
 			r.Post("/generate", userFileHandler.GenerateHandler)
 
 			r.Post("/doc/complete", userFileHandler.CheckExistenceAndProcessFile)
+
+			r.Get("/doc/status", userFileHandler.SSEHandler)
 		})
 
 	})

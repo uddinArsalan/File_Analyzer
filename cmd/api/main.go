@@ -89,15 +89,20 @@ func main() {
 		sseManager,
 	}
 
-	go rdb.SubscribeAndListen(ctx, subs)
+	go func() {
+		err := rdb.SubscribeAndListen(ctx, subs)
+		if err != nil {
+			log.Printf("Error listening events %v", err)
+		}
+	}()
 
-	server.NewServer(r, qClient, cohereClient, dbClient, s3Client, l, tokenService, rdb,sseManager)
+	server.NewServer(r, qClient, cohereClient, dbClient, s3Client, l, tokenService, rdb, sseManager)
 
 	s := &http.Server{
 		Addr:         ":3000",
 		Handler:      r,
 		ReadTimeout:  20 * time.Second,
-		WriteTimeout: 2 * time.Second,
+		WriteTimeout: 0 * time.Second,
 		IdleTimeout:  20 * time.Second,
 	}
 

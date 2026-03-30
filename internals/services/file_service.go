@@ -94,7 +94,7 @@ func (f *FileService) Stream(ctx context.Context, userID int64, flusher http.Flu
 		select {
 		case event := <-ch:
 			{
-				fmt.Fprintf(w, "data: %s\n\n", event.Status)
+				fmt.Fprintf(w, "data: %v\n\n", event)
 				flusher.Flush()
 			}
 		case <-ctx.Done():

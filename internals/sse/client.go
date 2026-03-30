@@ -19,7 +19,7 @@ func (sse *SSEManager) Notify(event domain.DocEvent) {
 	sse.mu.Lock()
 	ch, ok := sse.sseClients[event.UserID]
 	if !ok {
-		ch = make(chan domain.DocEvent)
+		ch = make(chan domain.DocEvent,10)
 		sse.sseClients[event.UserID] = ch
 	}
 	sse.mu.Unlock()

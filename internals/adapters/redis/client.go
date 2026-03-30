@@ -113,7 +113,7 @@ func (redisClient *RedisClient) SubscribeAndListen(ctx context.Context, subscrib
 			if err != nil {
 				return err
 			}
-			fmt.Printf("Received message: %s", event)
+			fmt.Printf("Received message: %+v", event)
 			sub.Notify(event)
 		}
 	}
