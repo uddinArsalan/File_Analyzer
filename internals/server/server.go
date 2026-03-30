@@ -11,6 +11,7 @@ import (
 	"file-analyzer/internals/middlewares"
 	repo "file-analyzer/internals/repository"
 	"file-analyzer/internals/services"
+	"file-analyzer/internals/sse"
 	"file-analyzer/internals/utils"
 	"log"
 	"net/http"
@@ -25,18 +26,18 @@ type Server struct {
 	logger *log.Logger
 }
 
-func NewServer(router *chi.Mux, qdrantClient qdrant.VectorStore, embedder cohere.Embedder, userRepo repo.UserRepository, s3Client backblaze.S3Store, logger *log.Logger, tokenService jwt.TokenService, cache redis.CacheStore) *Server {
+func NewServer(router *chi.Mux, qdrantClient qdrant.VectorStore, embedder cohere.Embedder, userRepo repo.UserRepository, s3Client backblaze.S3Store, logger *log.Logger, tokenService jwt.TokenService, cache redis.CacheStore, sse *sse.SSEManager) *Server {
 	s := &Server{
 		router: router,
 		logger: logger,
 	}
-	s.routes(qdrantClient, embedder, s3Client, tokenService, userRepo, cache)
+	s.routes(qdrantClient, embedder, s3Client, tokenService, userRepo, cache, sse)
 	return s
 }
 
-func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedder, s3Client backblaze.S3Store, tokenService jwt.TokenService, userRepo repo.UserRepository, cache redis.CacheStore) {
+func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedder, s3Client backblaze.S3Store, tokenService jwt.TokenService, userRepo repo.UserRepository, cache redis.CacheStore, sse *sse.SSEManager) {
 	// services
-	fileService := services.NewFileService(s3Client, userRepo, cache)
+	fileService := services.NewFileService(s3Client, userRepo, cache, sse)
 	askService := services.NewAskService(qdrantClient, embedder)
 	authService := services.NewAuthService(userRepo, tokenService)
 
@@ -45,9 +46,9 @@ func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedde
 	authHandler := handlers.NewAuthHandler(s.logger, authService)
 
 	// temp service
-	tempService := services.NewTempService(cache)
+	// tempService := services.NewTempService(cache)
 	// tempHandler
-	tempHandler := handlers.NewTempHandler(s.logger, tempService)
+	// tempHandler := handlers.NewTempHandler(s.logger, tempService)
 
 	// CORS
 	var allowedOrigins []string
@@ -55,7 +56,8 @@ func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedde
 		s.logger.Println("invalid ALLOWED_ORIGINS_JSON", err)
 	}
 
-	s.router.Group(func(r chi.Router) {
+	s.router.Route("/api/v1", func(r chi.Router) {
+
 		r.Use(cors.Handler(cors.Options{
 			AllowedOrigins:   allowedOrigins,
 			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -67,7 +69,7 @@ func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedde
 			r.Post("/auth/login", authHandler.LoginHandler)
 			r.Post("/auth/register", authHandler.RegisterHandler)
 			r.Post("/auth/refresh", authHandler.RefreshHandler)
-			r.Post("/post-jobs", tempHandler.Add)
+			// r.Post("/post-jobs", tempHandler.Add)
 		})
 
 		// PRIVATE ROUTES GROUP
@@ -86,6 +88,8 @@ func (s *Server) routes(qdrantClient qdrant.VectorStore, embedder cohere.Embedde
 			r.Post("/generate", userFileHandler.GenerateHandler)
 
 			r.Post("/doc/complete", userFileHandler.CheckExistenceAndProcessFile)
+
+			r.Get("/doc/status", userFileHandler.SSEHandler)
 		})
 
 	})

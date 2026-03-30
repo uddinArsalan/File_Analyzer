@@ -2,20 +2,18 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"strconv"
-	"time"
-
-	// "file-analyzer/cmd/worker/processor"
+	"file-analyzer/cmd/worker/processor"
 	"file-analyzer/internals/adapters/backblaze"
 	"file-analyzer/internals/adapters/cohere"
 	"file-analyzer/internals/adapters/qdrant"
 	"file-analyzer/internals/adapters/redis"
 	repo "file-analyzer/internals/repository"
 	"file-analyzer/queue"
+	"fmt"
 	"log"
+	"strconv"
 	"sync"
-	// "time"
+	"time"
 )
 
 type Worker struct {
@@ -45,7 +43,6 @@ func (w *Worker) Start() {
 			default:
 				{
 					workerName := fmt.Sprintf("Worker #%d", w.ID)
-					w.l.Printf("JOB PICKED BY %v", workerName)
 					streams, err := w.cache.ReadJobByConsumer(w.ctx, workerName)
 
 					if err != nil {
@@ -54,12 +51,25 @@ func (w *Worker) Start() {
 						continue
 					}
 
+					if len(streams) == 0 {
+						time.Sleep(500 * time.Millisecond)
+						continue
+					}
+
+					w.l.Printf("Job picked by %s", workerName)
+
 					for _, stream := range streams {
 						for _, msg := range stream.Messages {
-							userIDStr := msg.Values["user_id"].(string)
+							userIDStr, ok := msg.Values["user_id"].(string)
+							if !ok {
+								w.l.Printf("Worker #%d: missing or invalid user_id in msg %s", w.ID, msg.ID)
+								w.cache.SendAck(w.ctx, msg.ID)
+								continue
+							}
 							userID, err := strconv.ParseInt(userIDStr, 10, 64)
 							if err != nil {
-								w.l.Println("invalid user_id:", err)
+								w.l.Printf("Worker #%d: invalid user_id %q: %v", w.ID, userIDStr, err)
+								w.cache.SendAck(w.ctx, msg.ID)
 								continue
 							}
 							job := queue.Job{
@@ -67,9 +77,15 @@ func (w *Worker) Start() {
 								UserID:    userID,
 								ObjectKey: msg.Values["object_key"].(string),
 								DocID:     msg.Values["doc_id"].(string),
+								Mime_Type: msg.Values["mime_type"].(string),
 							}
 							// process job
-							w.l.Printf("JOB %v", job)
+							w.l.Printf("Processing job %v for worker %v", job, workerName)
+							processor := processor.NewProcessor(job, w.llm, w.vector, w.users, w.object,w.cache)
+							err = processor.Process(w.ctx, w.l)
+							if err != nil {
+								continue
+							}
 							// if success
 							// send acknowledgement use XACK
 							if err := w.cache.SendAck(w.ctx, msg.ID); err != nil {

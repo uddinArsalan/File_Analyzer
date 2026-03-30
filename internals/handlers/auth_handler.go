@@ -40,9 +40,8 @@ func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	SetCookie(r, w, "refresh_token", token.RefreshToken, 7*24*time.Hour)
-	utils.SUCCESS(w, http.StatusOK, "Login Successfully", dto.LoginResponse{
-		AccessToken: token.AccessToken,
-	})
+	SetCookie(r, w, "access_token", token.AccessToken, time.Hour)
+	utils.SUCCESS(w, http.StatusOK, "Login Successfully", nil)
 }
 
 func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
@@ -74,9 +73,8 @@ func (h *AuthHandler) RefreshHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	SetCookie(r, w, "refresh_token", token.RefreshToken, 7*24*time.Hour)
-	utils.SUCCESS(w, http.StatusOK, "Token Refreshed Successfully", dto.LoginResponse{
-		AccessToken: token.AccessToken,
-	})
+	SetCookie(r, w, "access_token", token.AccessToken, time.Hour)
+	utils.SUCCESS(w, http.StatusOK, "Token Refreshed Successfully", nil)
 }
 
 func SetCookie(r *http.Request, w http.ResponseWriter, name string, value string, maxAge time.Duration) {
@@ -92,5 +90,6 @@ func SetCookie(r *http.Request, w http.ResponseWriter, name string, value string
 }
 
 func DecodeJSON[T *dto.LoginRequest | *dto.RegisterRequest](r *http.Request, dst T) error {
+	defer r.Body.Close()
 	return json.NewDecoder(r.Body).Decode(dst)
 }
