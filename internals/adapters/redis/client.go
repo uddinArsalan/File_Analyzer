@@ -2,6 +2,9 @@ package redis
 
 import (
 	"context"
+	"encoding/json"
+	"file-analyzer/internals/domain"
+	"file-analyzer/internals/subscriber"
 	"file-analyzer/queue"
 	"fmt"
 	"os"
@@ -14,6 +17,7 @@ type RedisClient struct {
 	rdb           *redis.Client
 	streamName    string
 	consumerGroup string
+	channelName   string
 }
 
 func NewRedisClient(ctx context.Context) (*RedisClient, error) {
@@ -31,6 +35,7 @@ func NewRedisClient(ctx context.Context) (*RedisClient, error) {
 		rdb:           rdb,
 		streamName:    os.Getenv("REDIS_STREAM"),
 		consumerGroup: os.Getenv("REDIS_CONSUMER_GROUP"),
+		channelName:   os.Getenv("REDIS_EVENT_CHANNEL"),
 	}, nil
 }
 
@@ -44,6 +49,7 @@ func (redisClient *RedisClient) EnqueueJob(ctx context.Context, job *queue.Job) 
 		"object_key": job.ObjectKey,
 		"user_id":    job.UserID,
 		"doc_id":     job.DocID,
+		"mime_type":  job.Mime_Type,
 	}
 	res, err := redisClient.rdb.XAdd(ctx, &redis.XAddArgs{
 		ID:     "*",
@@ -90,4 +96,26 @@ func (redisClient *RedisClient) CreateAndCheckStream(parent context.Context) err
 func (redisClient *RedisClient) SendAck(ctx context.Context, id string) error {
 	_, err := redisClient.rdb.XAck(ctx, redisClient.streamName, redisClient.consumerGroup, id).Result()
 	return err
+}
+
+func (redisClient *RedisClient) PublishEvent(ctx context.Context, message domain.DocEvent) error {
+	return redisClient.rdb.Publish(ctx, redisClient.channelName, message).Err()
+}
+
+func (redisClient *RedisClient) SubscribeAndListen(ctx context.Context, subscribers []subscriber.Subscriber) error {
+	pubsub := redisClient.rdb.Subscribe(ctx, redisClient.channelName)
+	ch := pubsub.Channel()
+
+	for msg := range ch {
+		for _, sub := range subscribers {
+			var event domain.DocEvent
+			err := json.Unmarshal([]byte(msg.Payload), &event)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Received message: %+v", event)
+			sub.Notify(event)
+		}
+	}
+	return nil
 }

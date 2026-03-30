@@ -117,19 +117,19 @@ func (dbClient *DBClient) InsertDoc(docID string, doc domain.Document) error {
 
 func (dbClient *DBClient) UpdateDocStatus(docID string, status string) error {
 	query := `UPDATE documents SET status= $1 WHERE doc_id = $2`
-	_, err := dbClient.db.Exec(query)
+	_, err := dbClient.db.Exec(query,status,docID)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (dbClient *DBClient) DocumentExistsForUser(userID int64, docID string) error {
+func (dbClient *DBClient) DocumentExistsForUser(userID int64, docID string) (domain.Document, error) {
 	var res domain.Document
-	query := `SELECT id,doc_id,status FROM documents WHERE user_id = $1 AND doc_id = $2`
-	err := dbClient.db.QueryRow(query, userID, docID).Scan(&res.ID, &res.DocID, &res.Status)
+	query := `SELECT id,doc_id,status,mime_type FROM documents WHERE user_id = $1 AND doc_id = $2`
+	err := dbClient.db.QueryRow(query, userID, docID).Scan(&res.ID, &res.DocID, &res.Status, &res.Mime_Type)
 	if err != nil {
-		return err
+		return domain.Document{}, err
 	}
-	return nil
+	return res, nil
 }
