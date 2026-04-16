@@ -70,7 +70,7 @@ func (qClient *QdrantClient) InsertVectorEmbeddings(ctx context.Context, points 
 	return res, err
 }
 
-func (qClient *QdrantClient) SearchEmbedInDocument(ctx context.Context, embedding []float64, docId string) ([]*qdrant.ScoredPoint, error) {
+func (qClient *QdrantClient) SearchEmbeddingInDocument(ctx context.Context, embedding []float64, docId string) ([]*qdrant.ScoredPoint, error) {
 	var embed = make([]float32, len(embedding))
 	for i, val := range embedding {
 		embed[i] = float32(val)

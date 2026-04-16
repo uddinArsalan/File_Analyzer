@@ -4,8 +4,8 @@ import (
 	"context"
 	llm "file-analyzer/internals/adapters/cohere"
 	"file-analyzer/internals/adapters/qdrant"
+
 	cohere "github.com/cohere-ai/cohere-go/v2"
-	"time"
 )
 
 type AskService struct {
@@ -20,22 +20,29 @@ func NewAskService(vector qdrant.VectorStore, llm llm.Embedder) *AskService {
 	}
 }
 
-func (s *AskService) Ask(question string, docId string) (any, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-
+func (s *AskService) Ask(ctx context.Context, question string, docId string) (*cohere.AssistantMessageResponse, error) {
 	resp, err := s.llm.GenerateEmbedding(ctx, []string{question}, cohere.EmbedInputTypeSearchQuery)
 
 	if err != nil {
 		return nil, err
 	}
 
-	embed := resp.Embeddings.Float[0]
-
-	response, err := s.vector.SearchEmbedInDocument(ctx, embed, docId)
+	response, err := s.vector.SearchEmbeddingInDocument(ctx, resp.Embeddings.Float[0], docId)
 	if err != nil {
 		return nil, err
 	}
-	//now need to create a context and send to llm to answer
-	return response, nil
+	docs := make([]string, len(response))
+	for i, res := range response {
+		docs[i] = res.Payload["text"].GetStringValue()
+	}
+	reranked, err := s.llm.RerankContext(ctx, docs, question)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := s.llm.GenerateResponse(ctx, question, reranked)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
