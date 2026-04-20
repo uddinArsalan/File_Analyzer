@@ -4,6 +4,7 @@ import (
 	"context"
 	llm "file-analyzer/internals/adapters/cohere"
 	"file-analyzer/internals/adapters/qdrant"
+	"file-analyzer/internals/domain"
 
 	cohere "github.com/cohere-ai/cohere-go/v2"
 )
@@ -21,13 +22,13 @@ func NewAskService(vector qdrant.VectorStore, llm llm.Embedder) *AskService {
 }
 
 func (s *AskService) Ask(ctx context.Context, question string, docId string) (*cohere.AssistantMessageResponse, error) {
-	resp, err := s.llm.GenerateEmbedding(ctx, []string{question}, cohere.EmbedInputTypeSearchQuery)
+	embeddings, err := s.llm.GenerateEmbedding(ctx, []string{question}, domain.EmbedInputTypeSearchQuery)
 
 	if err != nil {
 		return nil, err
 	}
 
-	response, err := s.vector.SearchEmbeddingInDocument(ctx, resp.Embeddings.Float[0], docId)
+	response, err := s.vector.SearchEmbeddingInDocument(ctx, embeddings[0], docId)
 	if err != nil {
 		return nil, err
 	}

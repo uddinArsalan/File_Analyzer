@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"time"
+	"strconv"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -66,8 +67,8 @@ func (redisClient *RedisClient) EnqueueJob(ctx context.Context, job *queue.Job) 
 	return nil
 }
 
-func (redisClient *RedisClient) ReadJobByConsumer(ctx context.Context, consumer string) ([]redis.XStream, error) {
-	stream, err := redisClient.rdb.XReadGroup(ctx, &redis.XReadGroupArgs{
+func (redisClient *RedisClient) ReadJobByConsumer(ctx context.Context, consumer string) ([]queue.Job, error) {
+	streams, err := redisClient.rdb.XReadGroup(ctx, &redis.XReadGroupArgs{
 		Group:    redisClient.consumerGroup,
 		Consumer: consumer,
 		Streams:  []string{redisClient.streamName, ">"},
@@ -83,7 +84,30 @@ func (redisClient *RedisClient) ReadJobByConsumer(ctx context.Context, consumer 
 		return nil, err
 	}
 
-	return stream, nil
+	jobs := make([]queue.Job,0,10)
+
+	for _, stream := range streams {
+		for _, msg := range stream.Messages {
+			userIDStr, ok := msg.Values["user_id"].(string)
+			if !ok {
+				continue
+			}
+			userID, err := strconv.ParseInt(userIDStr, 10, 64)
+			if err != nil {
+				continue
+			}
+			newJob := queue.Job{
+				ID:        msg.Values["id"].(string),
+				UserID:    userID,
+				ObjectKey: msg.Values["object_key"].(string),
+				DocID:     msg.Values["doc_id"].(string),
+				Mime_Type: msg.Values["mime_type"].(string),
+			}
+			jobs = append(jobs,newJob)
+		}
+	}
+
+	return jobs, nil
 }
 
 func (redisClient *RedisClient) CreateAndCheckStream(parent context.Context) error {

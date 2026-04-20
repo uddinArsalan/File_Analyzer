@@ -10,7 +10,6 @@ import (
 
 	cohere "github.com/cohere-ai/cohere-go/v2"
 	"github.com/cohere-ai/cohere-go/v2/client"
-	"github.com/qdrant/go-client/qdrant"
 )
 
 type UserClient struct {
@@ -22,13 +21,13 @@ func NewCohereClient(ctx context.Context) (*UserClient, error) {
 	return &UserClient{Cohere: cohereClient}, nil
 }
 
-func (cc *UserClient) GenerateEmbedding(ctx context.Context, text []string, inputType cohere.EmbedInputType) (*cohere.EmbedByTypeResponse, error) {
+func (cc *UserClient) GenerateEmbedding(ctx context.Context, text []string, inputType domain.EmbedInputType) ([][]float64, error) {
 	resp, err := cc.Cohere.V2.Embed(
 		ctx,
 		&cohere.V2EmbedRequest{
 			Texts:          text,
 			Model:          "embed-v4.0",
-			InputType:      inputType,
+			InputType:      cohere.EmbedInputType(inputType),
 			EmbeddingTypes: []cohere.EmbeddingType{cohere.EmbeddingTypeFloat},
 		},
 	)
@@ -36,26 +35,27 @@ func (cc *UserClient) GenerateEmbedding(ctx context.Context, text []string, inpu
 		log.Printf("Failed to generate embeddings: %v", err)
 		return nil, fmt.Errorf("Embedding generation failed: %w", err)
 	}
-	return resp, nil
+	return resp.Embeddings.Float, nil
 }
 
-func (cc *UserClient) ProcessChunks(ctx context.Context, chunks []domain.Chunks) ([]*qdrant.PointStruct, error) {
+func (cc *UserClient) ProcessChunks(ctx context.Context, chunks []domain.Chunks) ([]domain.VectorPoint, error) {
 
 	chunkBatches := utils.BatchChunksForEmbedding(chunks)
 
-	embeddings := make([]domain.EmbeddingMetaData, 0, len(chunks))
+	accumulatedEmbeddings := make([]domain.EmbeddingMetaData, 0, len(chunks))
 
 	for _, batch := range chunkBatches {
 		texts := make([]string, len(batch))
 		for i, chunk := range batch {
 			texts[i] = chunk.ChunkText
 		}
-		resp, err := cc.GenerateEmbedding(ctx, texts, cohere.EmbedInputTypeSearchDocument)
+		log.Printf("Chunk Batch Length %d",len(texts))
+		embeddings, err := cc.GenerateEmbedding(ctx, texts, domain.EmbedInputTypeSearchDocument)
 		if err != nil {
 			return nil, err
 		}
-		for i, embed := range resp.Embeddings.Float{
-			embeddings = append(embeddings, domain.EmbeddingMetaData{
+		for i, embed := range embeddings{
+			accumulatedEmbeddings = append(accumulatedEmbeddings, domain.EmbeddingMetaData{
 				Embeddings: embed,
 				ChunkID: batch[i].ChunkID,
 				DocID:   batch[i].MetaData[domain.DocIDKey].(string),
@@ -65,23 +65,34 @@ func (cc *UserClient) ProcessChunks(ctx context.Context, chunks []domain.Chunks)
 		} 
 	}
 
-	points := make([]*qdrant.PointStruct, 0, len(embeddings))
+	// points := make([]*qdrant.PointStruct, 0, len(accumulatedEmbeddings))
+	points := make([]domain.VectorPoint, 0, len(accumulatedEmbeddings))
 
-	for i, embed := range embeddings {
+	for _, embed := range accumulatedEmbeddings {
 		vector := make([]float32, len(embed.Embeddings))
 
 		for j, v := range embed.Embeddings {
 			vector[j] = float32(v)
 		}
-		point := &qdrant.PointStruct{
-			Id:      qdrant.NewID(chunks[i].ChunkID),
-			Vectors: qdrant.NewVectors(vector...),
-			Payload: qdrant.NewValueMap(map[string]any{
+		// point := &qdrant.PointStruct{
+		// 	Id:      qdrant.NewID(embed.ChunkID),
+		// 	Vectors: qdrant.NewVectors(vector...),
+		// 	Payload: qdrant.NewValueMap(map[string]any{
+		// 		"user_id":  embed.UserID,
+		// 		"doc_id":   embed.DocID,
+		// 		"chunk_id": embed.ChunkID,
+		// 		"text":     embed.Text,
+		// 	}),
+		// }
+		point := domain.VectorPoint{
+			Id:     embed.ChunkID,
+			Vectors: vector,
+			Payload: map[string]any{
 				"user_id":  embed.UserID,
 				"doc_id":   embed.DocID,
 				"chunk_id": embed.ChunkID,
 				"text":     embed.Text,
-			}),
+			},
 		}
 		points = append(points, point)
 	}

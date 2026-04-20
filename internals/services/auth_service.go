@@ -107,11 +107,7 @@ func (s *AuthService) Refresh(incomingToken string) (*AuthTokens, error) {
 }
 
 func (s *AuthService) VerifyToken(tokenStr string) (string, error) {
-	token, err := s.jwt.VerifyToken(tokenStr)
-	if err != nil {
-		return "", err
-	}
-	userId, err := token.Claims.GetSubject()
+	userId, err := s.jwt.VerifyToken(tokenStr)
 	if err != nil {
 		return "", err
 	}
