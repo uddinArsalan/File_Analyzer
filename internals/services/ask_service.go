@@ -5,8 +5,6 @@ import (
 	llm "file-analyzer/internals/adapters/cohere"
 	"file-analyzer/internals/adapters/qdrant"
 	"file-analyzer/internals/domain"
-
-	cohere "github.com/cohere-ai/cohere-go/v2"
 )
 
 type AskService struct {
@@ -21,7 +19,7 @@ func NewAskService(vector qdrant.VectorStore, llm llm.Embedder) *AskService {
 	}
 }
 
-func (s *AskService) Ask(ctx context.Context, question string, docId string) (*cohere.AssistantMessageResponse, error) {
+func (s *AskService) Ask(ctx context.Context, question string, docId string) (*domain.AskResponse, error) {
 	embeddings, err := s.llm.GenerateEmbedding(ctx, []string{question}, domain.EmbedInputTypeSearchQuery)
 
 	if err != nil {
@@ -34,7 +32,7 @@ func (s *AskService) Ask(ctx context.Context, question string, docId string) (*c
 	}
 	docs := make([]string, len(response))
 	for i, res := range response {
-		docs[i] = res.Payload["text"].GetStringValue()
+		docs[i] = res.Payload
 	}
 	reranked, err := s.llm.RerankContext(ctx, docs, question)
 	if err != nil {
@@ -45,5 +43,8 @@ func (s *AskService) Ask(ctx context.Context, question string, docId string) (*c
 	if err != nil {
 		return nil, err
 	}
-	return result, nil
+	return &domain.AskResponse{
+		Content:   result.Content,
+		Citations: result.Citations,
+	}, nil
 }

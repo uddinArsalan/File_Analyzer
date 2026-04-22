@@ -5,3 +5,7 @@ type VectorPoint struct {
 	Vectors []float32
 	Payload map[string]any
 }
+
+type VectorSearchResult struct {
+	Payload string
+}

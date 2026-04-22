@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"encoding/json"
-	"file-analyzer/internals/services"
 	"file-analyzer/internals/handlers/dto"
+	"file-analyzer/internals/services"
 	"file-analyzer/internals/utils"
 	"github.com/go-chi/chi/v5"
 	"log"
@@ -38,8 +38,5 @@ func (cc *AskHandler) AskHandler(w http.ResponseWriter, r *http.Request) {
 
 	response, err := cc.service.Ask(r.Context(), q.Question, docId)
 
-	utils.SUCCESS(w, http.StatusOK, "Ask Successfully", dto.AskResponse{
-		Content:   response.Content,
-		Citations: response.Citations,
-	})
+	utils.SUCCESS(w, http.StatusOK, "Ask Successfully", response)
 }
