@@ -28,7 +28,7 @@ func main() {
 	if err != nil {
 		l.Fatal("Error loading .env file", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	secret := os.Getenv("JWT_SECRET_KEY")

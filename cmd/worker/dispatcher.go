@@ -17,9 +17,15 @@ type Dispatcher struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
 	wg          *sync.WaitGroup
+	l           *log.Logger
+	llm         cohere.Embedder
+	vector      qdrant.VectorStore
+	users       repo.UserRepository
+	object      backblaze.S3Store
+	cache       redis.CacheStore
 }
 
-func NewDispatcher(parent context.Context, workerCount, queueSize int) *Dispatcher {
+func NewDispatcher(parent context.Context, workerCount, queueSize int, l *log.Logger, llm cohere.Embedder, vector qdrant.VectorStore, users repo.UserRepository, object backblaze.S3Store, cache redis.CacheStore) *Dispatcher {
 	ctx, cancel := context.WithCancel(parent)
 
 	return &Dispatcher{
@@ -27,25 +33,32 @@ func NewDispatcher(parent context.Context, workerCount, queueSize int) *Dispatch
 		ctx:         ctx,
 		cancel:      cancel,
 		wg:          &sync.WaitGroup{},
+		l:           l,
+		llm:         llm,
+		vector:      vector,
+		users:       users,
+		object:      object,
+		cache:       cache,
 	}
 }
 
-func (d *Dispatcher) Start(l *log.Logger, llm cohere.Embedder, vector qdrant.VectorStore, users repo.UserRepository, object backblaze.S3Store, cache redis.CacheStore) {
+func (d *Dispatcher) Start() {
 	for i := 1; i <= d.WorkerCount; i++ {
 		d.wg.Add(1)
 		worker := &Worker{
 			ID:     i,
 			ctx:    d.ctx,
-			l:      l,
-			llm:    llm,
-			vector: vector,
-			users:  users,
-			object: object,
+			l:      d.l,
+			llm:    d.llm,
+			vector: d.vector,
+			users:  d.users,
+			object: d.object,
 			wg:     d.wg,
-			cache:  cache,
+			cache:  d.cache,
 		}
 		d.workers = append(d.workers, worker)
 		worker.Start()
+		worker.StartRecoveryWorker()
 	}
 }
 

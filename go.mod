@@ -12,9 +12,9 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/lib/pq v1.10.9
-	github.com/qdrant/go-client v1.15.2
+	github.com/qdrant/go-client v1.17.1
 	github.com/redis/go-redis/v9 v9.17.3
-	golang.org/x/crypto v0.46.0
+	golang.org/x/crypto v0.48.0
 )
 
 require (
@@ -41,10 +41,10 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.41.1
 	github.com/aws/smithy-go v1.24.0 // indirect
 	github.com/google/uuid v1.6.0
-	golang.org/x/net v0.47.0 // indirect
-	golang.org/x/sys v0.39.0 // indirect
-	golang.org/x/text v0.32.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240827150818-7e3bb234dfed // indirect
-	google.golang.org/grpc v1.66.0 // indirect
-	google.golang.org/protobuf v1.34.2 // indirect
+	golang.org/x/net v0.50.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/text v0.34.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260209200024-4cfbd4190f57 // indirect
+	google.golang.org/grpc v1.78.0 // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
 )

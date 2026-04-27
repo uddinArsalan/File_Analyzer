@@ -2,11 +2,10 @@ package qdrant
 
 import (
 	"context"
-
-	"github.com/qdrant/go-client/qdrant"
+	"file-analyzer/internals/domain"
 )
 
 type VectorStore interface {
-	InsertVectorEmbeddings(ctx context.Context, points []*qdrant.PointStruct) (*qdrant.UpdateResult, error)
-	SearchEmbedInDocument(ctx context.Context, embedding []float64, docId string) ([]*qdrant.ScoredPoint, error)
+	InsertVectorEmbeddings(ctx context.Context, vectorPoints []domain.VectorPoint) error
+	SearchEmbeddingInDocument(ctx context.Context, embedding []float64, docId string) ([]*domain.VectorSearchResult, error)
 }

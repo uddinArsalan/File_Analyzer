@@ -2,6 +2,7 @@ package qdrant
 
 import (
 	"context"
+	"file-analyzer/internals/domain"
 	"fmt"
 	"os"
 
@@ -62,15 +63,24 @@ func (qClient *QdrantClient) CollectionExists(ctx context.Context) (bool, error)
 	return isExists, nil
 }
 
-func (qClient *QdrantClient) InsertVectorEmbeddings(ctx context.Context, points []*qdrant.PointStruct) (*qdrant.UpdateResult, error) {
-	res, err := qClient.client.Upsert(ctx, &qdrant.UpsertPoints{
+func (qClient *QdrantClient) InsertVectorEmbeddings(ctx context.Context, vectorPoints []domain.VectorPoint) error {
+	points := make([]*qdrant.PointStruct, len(vectorPoints))
+	for _, pt := range vectorPoints {
+		point := &qdrant.PointStruct{
+			Id:      qdrant.NewID(pt.Id),
+			Vectors: qdrant.NewVectors(pt.Vectors...),
+			Payload: qdrant.NewValueMap(pt.Payload),
+		}
+		points = append(points, point)
+	}
+	_, err := qClient.client.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: qClient.collectionName,
 		Points:         points,
 	})
-	return res, err
+	return err
 }
 
-func (qClient *QdrantClient) SearchEmbedInDocument(ctx context.Context, embedding []float64, docId string) ([]*qdrant.ScoredPoint, error) {
+func (qClient *QdrantClient) SearchEmbeddingInDocument(ctx context.Context, embedding []float64, docId string) ([]*domain.VectorSearchResult, error) {
 	var embed = make([]float32, len(embedding))
 	for i, val := range embedding {
 		embed[i] = float32(val)
@@ -88,5 +98,5 @@ func (qClient *QdrantClient) SearchEmbedInDocument(ctx context.Context, embeddin
 		WithVectors: qdrant.NewWithVectorsInclude(),
 		// ScoreThreshold: &threshold,
 	})
-	return res, err
+	return ToVectorSearchResult(res), err
 }

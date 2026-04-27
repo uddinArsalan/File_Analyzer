@@ -46,15 +46,23 @@ func (p *Processor) Process(ctx context.Context, l *log.Logger) error {
 	// 1. Parsing
 	pm := parser.NewParserManager(stream, p.job.Size)
 	exts, err := mime.ExtensionsByType(p.job.Mime_Type)
+
 	if err != nil || len(exts) == 0 {
 		l.Printf("Unsupported MIME type: %s", p.job.Mime_Type)
 		return err
 	}
-	extension := strings.TrimPrefix(exts[0], ".")
+
+	extension := strings.TrimPrefix(pm.GetExtension(p.job.Mime_Type, exts), ".")
+
+	if extension == "" {
+		l.Printf("Could not determine file extension for MIME type: %s", p.job.Mime_Type)
+		return err
+	}
+
 	content, err := pm.ParseFile(extension)
 
 	if err != nil {
-		l.Printf("Parsing failed: %v", err)
+		l.Printf("Parsing failed: %v", err.Error())
 		return err
 	}
 
@@ -75,7 +83,7 @@ func (p *Processor) Process(ctx context.Context, l *log.Logger) error {
 	// l.Printf("Points: %+v\n", points)
 
 	// 3. Adding in Vector Store each embedding wit
-	_, err = p.vector.InsertVectorEmbeddings(ctx, points)
+	err = p.vector.InsertVectorEmbeddings(ctx, points)
 	if err != nil {
 		l.Printf("Error Inserting embeddings: %v", err)
 		return err
