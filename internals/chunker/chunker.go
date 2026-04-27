@@ -27,9 +27,9 @@ func (c *Chunker) Chunk() []domain.Chunks {
 	for i, chunkText := range rawChunks {
 		chunks[i].ChunkID = uuid.NewString()
 		chunks[i].ChunkText = chunkText
-		chunks[i].MetaData = make(map[string]interface{})
-		chunks[i].MetaData["user_id"] = c.UserID
-		chunks[i].MetaData["doc_id"] = c.DocID
+		chunks[i].MetaData = make(map[domain.MetaDataKeys]interface{})
+		chunks[i].MetaData[domain.UserIDKey] = c.UserID
+		chunks[i].MetaData[domain.DocIDKey] = c.DocID
 	}
 	return chunks
 }

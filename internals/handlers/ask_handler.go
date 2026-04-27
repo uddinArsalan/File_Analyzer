@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"file-analyzer/internals/handlers/dto"
 	"file-analyzer/internals/services"
 	"file-analyzer/internals/utils"
 	"github.com/go-chi/chi/v5"
@@ -21,14 +22,10 @@ func NewAskHandler(service *services.AskService, l *log.Logger) *AskHandler {
 	}
 }
 
-type UserQuestion struct {
-	Question string
-}
-
 func (cc *AskHandler) AskHandler(w http.ResponseWriter, r *http.Request) {
 	docId := chi.URLParam(r, "docId")
 
-	var q UserQuestion
+	var q dto.UserQuestion
 	err := json.NewDecoder(r.Body).Decode(&q)
 
 	defer r.Body.Close()
@@ -39,7 +36,7 @@ func (cc *AskHandler) AskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := cc.service.Ask(q.Question, docId)
+	response, err := cc.service.Ask(r.Context(), q.Question, docId)
 
 	utils.SUCCESS(w, http.StatusOK, "Ask Successfully", response)
 }

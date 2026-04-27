@@ -66,8 +66,8 @@ func (redisClient *RedisClient) EnqueueJob(ctx context.Context, job *queue.Job) 
 	return nil
 }
 
-func (redisClient *RedisClient) ReadJobByConsumer(ctx context.Context, consumer string) ([]redis.XStream, error) {
-	stream, err := redisClient.rdb.XReadGroup(ctx, &redis.XReadGroupArgs{
+func (redisClient *RedisClient) ReadJobByConsumer(ctx context.Context, consumer string) ([]queue.Job, error) {
+	streams, err := redisClient.rdb.XReadGroup(ctx, &redis.XReadGroupArgs{
 		Group:    redisClient.consumerGroup,
 		Consumer: consumer,
 		Streams:  []string{redisClient.streamName, ">"},
@@ -83,7 +83,13 @@ func (redisClient *RedisClient) ReadJobByConsumer(ctx context.Context, consumer 
 		return nil, err
 	}
 
-	return stream, nil
+	jobs := make([]queue.Job, 0, 10)
+
+	for _, stream := range streams {
+		jobs = append(jobs, ToJobsList(stream.Messages)...)
+	}
+
+	return jobs, nil
 }
 
 func (redisClient *RedisClient) CreateAndCheckStream(parent context.Context) error {
@@ -118,4 +124,36 @@ func (redisClient *RedisClient) SubscribeAndListen(ctx context.Context, subscrib
 		}
 	}
 	return nil
+}
+
+func (redisClient *RedisClient) GetPendingJobs(ctx context.Context) ([]XPending, error) {
+	cmd := redisClient.rdb.XPendingExt(ctx, &redis.XPendingExtArgs{
+		Stream: redisClient.streamName,
+		Group:  redisClient.consumerGroup,
+		Idle:   time.Minute,
+		Start:  "-",
+		End:    "+",
+		Count:  10,
+	})
+
+	res, err := cmd.Result()
+	if err != nil {
+		return nil, err
+	}
+	return ToXPendingList(res), nil
+}
+
+func (redisClient *RedisClient) ClaimPendingJobs(ctx context.Context, consumerName string, messageIds []string) ([]queue.Job, error) {
+	cmd := redisClient.rdb.XClaim(ctx, &redis.XClaimArgs{
+		Stream:   redisClient.streamName,
+		Group:    redisClient.consumerGroup,
+		MinIdle:  time.Minute,
+		Messages: messageIds,
+		Consumer: consumerName,
+	})
+	messages, err := cmd.Result()
+	if err != nil {
+		return []queue.Job{}, err
+	}
+	return ToJobsList(messages), nil
 }

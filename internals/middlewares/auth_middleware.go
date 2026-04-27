@@ -30,6 +30,7 @@ func Auth(s services.AuthService) func(next http.Handler) http.Handler {
 			accessToken, err := r.Cookie("access_token")
 			if err != nil {
 				utils.FAIL(w, http.StatusUnauthorized, "Invalid Authorization Cookies")
+				return
 			}
 			userID, err := s.VerifyToken(accessToken.Value)
 			if err != nil {

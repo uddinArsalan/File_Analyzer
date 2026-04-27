@@ -5,15 +5,15 @@ import (
 	"file-analyzer/internals/domain"
 	"file-analyzer/internals/subscriber"
 	"file-analyzer/queue"
-
-	"github.com/redis/go-redis/v9"
 )
 
 type CacheStore interface {
 	EnqueueJob(ctx context.Context, job *queue.Job) error
-	ReadJobByConsumer(ctx context.Context, consumer string) ([]redis.XStream, error)
+	ReadJobByConsumer(ctx context.Context, consumer string) ([]queue.Job, error)
 	SendAck(ctx context.Context, id string) error
 	CreateAndCheckStream(parent context.Context) error
 	PublishEvent(ctx context.Context, message domain.DocEvent) error
 	SubscribeAndListen(ctx context.Context, subscribers []subscriber.Subscriber) error
+	GetPendingJobs(ctx context.Context) ([]XPending, error)
+	ClaimPendingJobs(ctx context.Context, consumerName string, messageIds []string) ([]queue.Job, error)
 }
