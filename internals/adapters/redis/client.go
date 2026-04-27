@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"time"
-	"strconv"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -84,27 +83,10 @@ func (redisClient *RedisClient) ReadJobByConsumer(ctx context.Context, consumer 
 		return nil, err
 	}
 
-	jobs := make([]queue.Job,0,10)
+	jobs := make([]queue.Job, 0, 10)
 
 	for _, stream := range streams {
-		for _, msg := range stream.Messages {
-			userIDStr, ok := msg.Values["user_id"].(string)
-			if !ok {
-				continue
-			}
-			userID, err := strconv.ParseInt(userIDStr, 10, 64)
-			if err != nil {
-				continue
-			}
-			newJob := queue.Job{
-				ID:        msg.Values["id"].(string),
-				UserID:    userID,
-				ObjectKey: msg.Values["object_key"].(string),
-				DocID:     msg.Values["doc_id"].(string),
-				Mime_Type: msg.Values["mime_type"].(string),
-			}
-			jobs = append(jobs,newJob)
-		}
+		jobs = append(jobs, ToJobsList(stream.Messages)...)
 	}
 
 	return jobs, nil
@@ -142,4 +124,36 @@ func (redisClient *RedisClient) SubscribeAndListen(ctx context.Context, subscrib
 		}
 	}
 	return nil
+}
+
+func (redisClient *RedisClient) GetPendingJobs(ctx context.Context) ([]XPending, error) {
+	cmd := redisClient.rdb.XPendingExt(ctx, &redis.XPendingExtArgs{
+		Stream: redisClient.streamName,
+		Group:  redisClient.consumerGroup,
+		Idle:   time.Minute,
+		Start:  "-",
+		End:    "+",
+		Count:  10,
+	})
+
+	res, err := cmd.Result()
+	if err != nil {
+		return nil, err
+	}
+	return ToXPendingList(res), nil
+}
+
+func (redisClient *RedisClient) ClaimPendingJobs(ctx context.Context, consumerName string, messageIds []string) ([]queue.Job, error) {
+	cmd := redisClient.rdb.XClaim(ctx, &redis.XClaimArgs{
+		Stream:   redisClient.streamName,
+		Group:    redisClient.consumerGroup,
+		MinIdle:  time.Minute,
+		Messages: messageIds,
+		Consumer: consumerName,
+	})
+	messages, err := cmd.Result()
+	if err != nil {
+		return []queue.Job{}, err
+	}
+	return ToJobsList(messages), nil
 }

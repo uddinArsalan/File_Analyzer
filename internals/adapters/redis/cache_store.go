@@ -14,4 +14,6 @@ type CacheStore interface {
 	CreateAndCheckStream(parent context.Context) error
 	PublishEvent(ctx context.Context, message domain.DocEvent) error
 	SubscribeAndListen(ctx context.Context, subscribers []subscriber.Subscriber) error
+	GetPendingJobs(ctx context.Context) ([]XPending, error)
+	ClaimPendingJobs(ctx context.Context, consumerName string, messageIds []string) ([]queue.Job, error)
 }

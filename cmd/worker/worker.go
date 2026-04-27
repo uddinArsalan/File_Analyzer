@@ -39,30 +39,29 @@ func (w *Worker) Start() {
 			default:
 				{
 					workerName := fmt.Sprintf("Worker #%d", w.ID)
-					w.l.Printf("Job picked by %s", workerName)
-
-					jobs, err := w.cache.ReadJobByConsumer(w.ctx, workerName)
-					if err != nil {
-						w.l.Printf("Error reading jobs from stream")
-						break
-					}
-					for _, job := range jobs {
-						// process job
-						w.l.Printf("Processing job %v for worker %v", job, workerName)
-						processor := processor.NewProcessor(job, w.llm, w.vector, w.users, w.object, w.cache)
-						err = processor.Process(w.ctx, w.l)
-						if err != nil {
-							continue
-						}
-						// if success
-						// send acknowledgement use XACK
-						if err := w.cache.SendAck(w.ctx, job.ID); err != nil {
-							w.l.Printf("Error sending Acknowledgement.. %v", err.Error())
-						}
-					}
-
+					w.ProcessJobs(workerName)
 				}
 			}
 		}
 	}()
+}
+
+func (w *Worker) ProcessJobs(workerName string) {
+	jobs, err := w.cache.ReadJobByConsumer(w.ctx, workerName)
+	if err != nil {
+		w.l.Printf("Error reading jobs from stream")
+		return
+	}
+
+	w.l.Printf("Job picked by %s", workerName)
+	for _, job := range jobs {
+		// process job
+		w.l.Printf("Processing job %v for worker %v", job, workerName)
+		processor := processor.NewProcessor(job, w.llm, w.vector, w.users, w.object, w.cache)
+		err = processor.Process(w.ctx, w.l)
+		if err := w.cache.SendAck(w.ctx, job.ID); err != nil {
+			w.l.Printf("Error sending Acknowledgement.. %v", err.Error())
+			return
+		}
+	}
 }

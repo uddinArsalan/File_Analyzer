@@ -66,9 +66,8 @@ func main() {
 		}
 	}
 
-	d := NewDispatcher(ctx, 3, 12)
-	d.Start(l, cohereClient, qClient, dbClient, s3Client, rdb)
-	// d.StartRedisListener(ctx, l, rdb)
+	d := NewDispatcher(ctx, 3, 12, l, cohereClient, qClient, dbClient, s3Client, rdb)
+	d.Start()
 
 	<-ctx.Done()
 
