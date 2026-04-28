@@ -14,10 +14,12 @@ import (
 )
 
 type RedisClient struct {
-	rdb           *redis.Client
-	streamName    string
-	consumerGroup string
-	channelName   string
+	rdb            *redis.Client
+	streamName     string
+	consumerGroup  string
+	channelName    string
+	sortedSetKey   string
+	deadStreamName string
 }
 
 func NewRedisClient(ctx context.Context) (*RedisClient, error) {
@@ -32,10 +34,12 @@ func NewRedisClient(ctx context.Context) (*RedisClient, error) {
 		return nil, fmt.Errorf("Error Ping Connection Redis %v", err.Error())
 	}
 	return &RedisClient{
-		rdb:           rdb,
-		streamName:    os.Getenv("REDIS_STREAM"),
-		consumerGroup: os.Getenv("REDIS_CONSUMER_GROUP"),
-		channelName:   os.Getenv("REDIS_EVENT_CHANNEL"),
+		rdb:            rdb,
+		streamName:     os.Getenv("REDIS_STREAM"),
+		consumerGroup:  os.Getenv("REDIS_CONSUMER_GROUP"),
+		channelName:    os.Getenv("REDIS_EVENT_CHANNEL"),
+		sortedSetKey:   os.Getenv("REDIS_SORTED_SET_KEY"),
+		deadStreamName: os.Getenv("REDIS_DEAD_STREAM"),
 	}, nil
 }
 
@@ -43,13 +47,15 @@ func (redisClient *RedisClient) CloseRedisClient() error {
 	return redisClient.rdb.Close()
 }
 
-func (redisClient *RedisClient) EnqueueJob(ctx context.Context, job *queue.Job) error {
+func (redisClient *RedisClient) EnqueueJob(ctx context.Context, job queue.Job) error {
 	values := map[string]interface{}{
-		"id":         job.ID,
-		"object_key": job.ObjectKey,
-		"user_id":    job.UserID,
-		"doc_id":     job.DocID,
-		"mime_type":  job.Mime_Type,
+		"id":          job.ID,
+		"object_key":  job.ObjectKey,
+		"user_id":     job.UserID,
+		"doc_id":      job.DocID,
+		"mime_type":   job.Mime_Type,
+		"size":        job.Size,
+		"retry_count": job.RetryCount,
 	}
 	res, err := redisClient.rdb.XAdd(ctx, &redis.XAddArgs{
 		ID:     "*",
@@ -156,4 +162,46 @@ func (redisClient *RedisClient) ClaimPendingJobs(ctx context.Context, consumerNa
 		return []queue.Job{}, err
 	}
 	return ToJobsList(messages), nil
+}
+
+func (redisClient *RedisClient) AddJobToSortedSet(ctx context.Context, job queue.Job, timestamp float64) error {
+	member := map[string]interface{}{
+		"id":          job.ID,
+		"object_key":  job.ObjectKey,
+		"user_id":     job.UserID,
+		"doc_id":      job.DocID,
+		"mime_type":   job.Mime_Type,
+		"size":        job.Size,
+		"retry_count": job.RetryCount,
+	}
+	return redisClient.rdb.ZAdd(ctx, redisClient.sortedSetKey, redis.Z{
+		Member: member,
+		Score:  timestamp,
+	}).Err()
+}
+
+func (redisClient *RedisClient) EnqueueJobToDeadLetterQueue(ctx context.Context, job queue.Job) error {
+	data, _ := json.Marshal(job)
+	res, err := redisClient.rdb.XAdd(ctx, &redis.XAddArgs{
+		ID:     "*",
+		Stream: redisClient.deadStreamName,
+		Values: data,
+	}).Result()
+
+	if err != nil {
+		fmt.Printf("Error %v", err)
+		return err
+	}
+
+	fmt.Printf("Document job enqueued to Dead letter queue %v \n", res)
+	return nil
+}
+
+func (redisClient *RedisClient) GetJobsReadyForRetry(ctx context.Context) ([]string, error) {
+	cmd := redisClient.rdb.ZRange(ctx, redisClient.sortedSetKey, 0, time.Now().Unix())
+	res, err := cmd.Result()
+	if err != nil {
+		return []string{}, err
+	}
+	return res, nil
 }

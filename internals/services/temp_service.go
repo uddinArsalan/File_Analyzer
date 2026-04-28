@@ -21,11 +21,14 @@ func NewTempService(cache redis.CacheStore) *TempService {
 
 func (t *TempService) AddTemporaryJobs(ctx context.Context, i int64) {
 	for j := range i {
-		t.cache.EnqueueJob(ctx, &queue.Job{
+		t.cache.EnqueueJob(ctx, queue.Job{
 			ID:        uuid.New().String(),
 			UserID:    i,
 			ObjectKey: fmt.Sprintf("key:%v", j),
 			DocID:     uuid.New().String(),
+			Mime_Type: "text/plain",
+			Size: 456,
+			RetryCount: 0,
 		})
 	}
 }
