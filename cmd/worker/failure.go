@@ -6,9 +6,6 @@ import (
 	"time"
 )
 
-const MAX_COUNT int64 = 3
-const BASE_DELAY = 100
-
 func (w *Worker) StartRecoveryWorker() {
 	go func() {
 		ticker := time.NewTicker(time.Minute)
@@ -17,7 +14,7 @@ func (w *Worker) StartRecoveryWorker() {
 			select {
 			case <-w.ctx.Done():
 				{
-					w.l.Print("Shutting down failure recovery...")
+					w.l.Printf("Shutting down failure recovery... %v",w.ID)
 					return
 				}
 			case <-ticker.C:
@@ -37,7 +34,7 @@ func (w *Worker) StartRecoveryWorker() {
 						w.l.Printf("Error Claiming Jobs %v", err)
 					}
 					for _, job := range jobs {
-						w.l.Printf("Processing job %v for worker %v", job, workerName)
+						w.l.Printf("Processing job %+v for worker %s", job, workerName)
 						processor := processor.NewProcessor(job, w.llm, w.vector, w.users, w.object, w.cache)
 						err = processor.Process(w.ctx, w.l)
 						if err := w.cache.SendAck(w.ctx, job.ID); err != nil {

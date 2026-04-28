@@ -59,6 +59,7 @@ func (d *Dispatcher) Start() {
 		d.workers = append(d.workers, worker)
 		worker.Start()
 		worker.StartRecoveryWorker()
+		worker.StartRetryingJobs()
 	}
 }
 
@@ -66,48 +67,3 @@ func (d *Dispatcher) Stop() {
 	d.cancel()  // stop workers
 	d.wg.Wait() // wait for workers to finish
 }
-
-// func (d *Dispatcher) StartRedisListener(ctx context.Context, l *log.Logger, cache redis.CacheStore) {
-// 	lastID := "$"
-
-// 	go func() {
-// 		for {
-// 			select {
-// 			case <-ctx.Done():
-// 				{
-// 					l.Println("Redis listener stopping...")
-// 					return
-// 				}
-// 			default:
-// 				{
-// 					streams, err := cache.DequeueJob(ctx, lastID)
-
-// 					if err != nil {
-// 						l.Println("Redis read error:", err)
-// 						time.Sleep(2 * time.Second)
-// 						continue
-// 					}
-
-// 					for _, stream := range streams {
-// 						for _, msg := range stream.Messages {
-// 							lastID = msg.ID
-// 							userIDStr := msg.Values["user_id"].(string)
-// 							userID, err := strconv.ParseInt(userIDStr, 10, 64)
-// 							if err != nil {
-// 								l.Println("invalid user_id:", err)
-// 								continue
-// 							}
-// 							job := queue.Job{
-// 								ID:        msg.Values["id"].(string),
-// 								UserID:    userID,
-// 								ObjectKey: msg.Values["object_key"].(string),
-// 								DocID:     msg.Values["doc_id"].(string),
-// 							}
-// 							d.Submit(job)
-// 						}
-// 					}
-// 				}
-// 			}
-// 		}
-// 	}()
-// }

@@ -116,8 +116,11 @@ func (dbClient *DBClient) InsertDoc(docID string, doc domain.Document) error {
 }
 
 func (dbClient *DBClient) UpdateDocStatus(docID string, status string) error {
-	query := `UPDATE documents SET status= $1 WHERE doc_id = $2`
-	_, err := dbClient.db.Exec(query,status,docID)
+	query := `UPDATE documents
+			  SET
+			  	 status= $1
+			  WHERE doc_id = $2`
+	_, err := dbClient.db.Exec(query, status, docID)
 	if err != nil {
 		return err
 	}
