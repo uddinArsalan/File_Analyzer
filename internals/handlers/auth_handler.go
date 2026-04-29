@@ -65,6 +65,12 @@ func (h *AuthHandler) RefreshHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.l.Println("Error Reading Refresh Token")
 		utils.FAIL(w, http.StatusBadRequest, "Internal Server Error")
+		return
+	}
+	if incomingRefreshToken.Value == "" {
+		h.l.Printf("Empty refresh token")
+		utils.FAIL(w, http.StatusUnauthorized, "Invalid credentials")
+		return
 	}
 	token, err := h.service.Refresh(incomingRefreshToken.Value)
 	if err != nil {

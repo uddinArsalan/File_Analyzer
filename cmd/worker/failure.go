@@ -7,6 +7,8 @@ import (
 )
 
 func (w *Worker) StartRecoveryWorker() {
+	w.wg.Add(1)
+	w.l.Printf("Worked ID started (RECOVERY WORKER) %d", w.ID)
 	go func() {
 		ticker := time.NewTicker(time.Minute)
 		defer w.wg.Done()
@@ -25,10 +27,15 @@ func (w *Worker) StartRecoveryWorker() {
 						w.l.Printf("Error reading pel %v", err.Error())
 						return
 					}
-					pending := make([]string, len(pendingEntryList))
-					for _, entry := range pendingEntryList {
-						pending = append(pending, entry.ID)
+					if len(pendingEntryList) == 0 {
+						w.l.Printf("No jobs to recover (empty pel)")
+						return
 					}
+					pending := make([]string, len(pendingEntryList))
+					for i, entry := range pendingEntryList {
+						pending[i] = entry.ID
+					}
+					w.l.Printf("Pending jobs %v",pending)
 					jobs, err := w.cache.ClaimPendingJobs(w.ctx, workerName, pending)
 					if err != nil {
 						w.l.Printf("Error Claiming Jobs %v", err)

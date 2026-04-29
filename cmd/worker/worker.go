@@ -28,7 +28,8 @@ type Worker struct {
 }
 
 func (w *Worker) Start() {
-	w.l.Printf("Worked ID started %d", w.ID)
+	w.wg.Add(1)
+	w.l.Printf("Worked ID started (MAIN WORKER) %d", w.ID)
 	go func() {
 		defer w.wg.Done()
 		for {
@@ -57,8 +58,6 @@ func (w *Worker) ProcessJobs(workerName string) {
 		w.l.Printf("Error reading jobs from stream")
 		return
 	}
-
-	w.l.Printf("Job picked by %s", workerName)
 	for _, job := range jobs {
 		// process job
 		w.l.Printf("Processing job %v for worker %v", job, workerName)
@@ -80,7 +79,15 @@ func (w *Worker) ProcessJobs(workerName string) {
 				backoff := base + jitter
 				retryAt := time.Now().Add(time.Duration(backoff * int(time.Second))).Unix()
 				job.RetryCount++
-				err = w.cache.AddJobToSortedSet(w.ctx, job, float64(retryAt))
+				// will add job id here
+				// and job payload in HSET and then in retry worker
+				// get job from Hset and prepare job payload then
+				// ZPOPMin job id and corresponding job from above and add in main stream
+				// It should be in lua script so that its safe if worker
+				// crash in between after removing job and before adding in
+				// main queue job will be lost forever
+				// and ZPopMin is atomic if multiple workers try simultaneously
+				err = w.cache.AddJobToSortedSet(w.ctx, job.ID, float64(retryAt))
 				if err != nil {
 					w.l.Printf("Error adding job to redis sorted set %v", err)
 					continue
@@ -102,7 +109,7 @@ func (w *Worker) ProcessJobs(workerName string) {
 			}
 			// A worker will pick this job from sorted set and add it in main queue
 		}
-		if err := w.cache.SendAck(w.ctx, job.ID); err != nil {
+		if err := w.cache.SendAck(w.ctx, job.StreamID); err != nil {
 			w.l.Printf("Error sending Acknowledgement.. %v", err.Error())
 			return
 		}

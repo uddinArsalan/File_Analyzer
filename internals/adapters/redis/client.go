@@ -48,23 +48,17 @@ func (redisClient *RedisClient) CloseRedisClient() error {
 }
 
 func (redisClient *RedisClient) EnqueueJob(ctx context.Context, job queue.Job) error {
-	values := map[string]interface{}{
-		"id":          job.ID,
-		"object_key":  job.ObjectKey,
-		"user_id":     job.UserID,
-		"doc_id":      job.DocID,
-		"mime_type":   job.Mime_Type,
-		"size":        job.Size,
-		"retry_count": job.RetryCount,
-	}
+	data, _ := json.Marshal(job)
 	res, err := redisClient.rdb.XAdd(ctx, &redis.XAddArgs{
 		ID:     "*",
 		Stream: redisClient.streamName,
-		Values: values,
+		Values: map[string]interface{}{
+			"data": data,
+		},
 	}).Result()
 
 	if err != nil {
-		fmt.Printf("Error %v", err)
+		fmt.Printf("Error insering job in main stream %v", err)
 		return err
 	}
 
@@ -164,18 +158,9 @@ func (redisClient *RedisClient) ClaimPendingJobs(ctx context.Context, consumerNa
 	return ToJobsList(messages), nil
 }
 
-func (redisClient *RedisClient) AddJobToSortedSet(ctx context.Context, job queue.Job, timestamp float64) error {
-	member := map[string]interface{}{
-		"id":          job.ID,
-		"object_key":  job.ObjectKey,
-		"user_id":     job.UserID,
-		"doc_id":      job.DocID,
-		"mime_type":   job.Mime_Type,
-		"size":        job.Size,
-		"retry_count": job.RetryCount,
-	}
+func (redisClient *RedisClient) AddJobToSortedSet(ctx context.Context, jobID string, timestamp float64) error {
 	return redisClient.rdb.ZAdd(ctx, redisClient.sortedSetKey, redis.Z{
-		Member: member,
+		Member: jobID,
 		Score:  timestamp,
 	}).Err()
 }
@@ -185,11 +170,13 @@ func (redisClient *RedisClient) EnqueueJobToDeadLetterQueue(ctx context.Context,
 	res, err := redisClient.rdb.XAdd(ctx, &redis.XAddArgs{
 		ID:     "*",
 		Stream: redisClient.deadStreamName,
-		Values: data,
+		Values: map[string]interface{}{
+			"data": data,
+		},
 	}).Result()
 
 	if err != nil {
-		fmt.Printf("Error %v", err)
+		fmt.Printf("Error inserting job in dead letter queue %v", err)
 		return err
 	}
 
@@ -197,7 +184,7 @@ func (redisClient *RedisClient) EnqueueJobToDeadLetterQueue(ctx context.Context,
 	return nil
 }
 
-func (redisClient *RedisClient) GetJobsReadyForRetry(ctx context.Context) ([]string, error) {
+func (redisClient *RedisClient) GetJobIDsReadyForRetry(ctx context.Context) ([]string, error) {
 	cmd := redisClient.rdb.ZRange(ctx, redisClient.sortedSetKey, 0, time.Now().Unix())
 	res, err := cmd.Result()
 	if err != nil {

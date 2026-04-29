@@ -1,8 +1,9 @@
 package redis
 
 import (
+	"encoding/json"
 	"file-analyzer/queue"
-	"strconv"
+	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -31,22 +32,25 @@ func ToXPendingList(res []redis.XPendingExt) []XPending {
 func ToJobsList(msgsList []redis.XMessage) []queue.Job {
 	jobs := make([]queue.Job, len(msgsList))
 	for i, msg := range msgsList {
-		userIDStr, ok := msg.Values["user_id"].(string)
+		raw, ok := msg.Values["data"].(string)
 		if !ok {
 			continue
 		}
-		userID, err := strconv.ParseInt(userIDStr, 10, 64)
+		job, err := ParseJob(raw)
 		if err != nil {
+			fmt.Printf("Error Parsing Job %v", err)
 			continue
 		}
-		newJob := queue.Job{
-			ID:        msg.Values["id"].(string),
-			UserID:    userID,
-			ObjectKey: msg.Values["object_key"].(string),
-			DocID:     msg.Values["doc_id"].(string),
-			Mime_Type: msg.Values["mime_type"].(string),
-		}
-		jobs[i] = newJob
+		jobs[i] = *job
 	}
 	return jobs
+}
+
+func ParseJob(item string) (*queue.Job, error) {
+	var job queue.Job
+	err := json.Unmarshal([]byte(item), &job)
+	if err != nil {
+		return nil, err
+	}
+	return &job, nil
 }

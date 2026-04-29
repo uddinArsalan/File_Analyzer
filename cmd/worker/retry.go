@@ -7,6 +7,8 @@ import (
 )
 
 func (w *Worker) StartRetryingJobs() {
+	w.wg.Add(1)
+	w.l.Printf("Worked ID started (RETRY WORKER) %d", w.ID)
 	go func() {
 		defer w.wg.Done()
 		for {
@@ -14,12 +16,12 @@ func (w *Worker) StartRetryingJobs() {
 			select {
 			case <-w.ctx.Done():
 				{
-					w.l.Printf("Worker #%d stopping...\n", w.ID)
+					w.l.Printf("Shtting down Retry Worker ID(#%d) stopping...\n", w.ID)
 					return
 				}
 			case <-ticker.C:
 				{
-					res, err := w.cache.GetJobsReadyForRetry(w.ctx)
+					res, err := w.cache.GetJobIDsReadyForRetry(w.ctx)
 					if err != nil {
 						w.l.Printf("Error getting jobs to retry err = %v\n", err)
 						return

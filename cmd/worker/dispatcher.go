@@ -44,7 +44,6 @@ func NewDispatcher(parent context.Context, workerCount, queueSize int, l *log.Lo
 
 func (d *Dispatcher) Start() {
 	for i := 1; i <= d.WorkerCount; i++ {
-		d.wg.Add(1)
 		worker := &Worker{
 			ID:     i,
 			ctx:    d.ctx,

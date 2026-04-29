@@ -16,7 +16,7 @@ type CacheStore interface {
 	SubscribeAndListen(ctx context.Context, subscribers []subscriber.Subscriber) error
 	GetPendingJobs(ctx context.Context) ([]XPending, error)
 	ClaimPendingJobs(ctx context.Context, consumerName string, messageIds []string) ([]queue.Job, error)
-	AddJobToSortedSet(ctx context.Context, job queue.Job, timestamp float64) error
+	AddJobToSortedSet(ctx context.Context, job string, timestamp float64) error
 	EnqueueJobToDeadLetterQueue(ctx context.Context, job queue.Job) error
-	GetJobsReadyForRetry(ctx context.Context) ([]string, error)
+	GetJobIDsReadyForRetry(ctx context.Context) ([]string, error)
 }
