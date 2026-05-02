@@ -41,7 +41,16 @@ func ToJobsList(msgsList []redis.XMessage) []queue.Job {
 			fmt.Printf("Error Parsing Job %v", err)
 			continue
 		}
-		jobs[i] = *job
+		jobs[i] = queue.Job{
+			ID:         job.ID,
+			StreamID:   msg.ID,
+			ObjectKey:  job.ObjectKey,
+			UserID:     job.UserID,
+			DocID:      job.DocID,
+			Mime_Type:  job.Mime_Type,
+			Size:       job.Size,
+			RetryCount: job.RetryCount,
+		}
 	}
 	return jobs
 }

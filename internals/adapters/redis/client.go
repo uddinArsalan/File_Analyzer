@@ -192,3 +192,41 @@ func (redisClient *RedisClient) GetJobIDsReadyForRetry(ctx context.Context) ([]s
 	}
 	return res, nil
 }
+
+func (redisClient *RedisClient) EvaluateRetryScript(ctx context.Context) (int, error) {
+	now := time.Now().UnixMilli()
+	var script = redis.NewScript(`
+    local jobs = redis.call('ZRANGE', KEYS[1], 0, ARGV[1], 'BYSCORE', 'LIMIT', 0, ARGV[2])
+if #jobs == 0 then
+    return 0
+end
+
+local payloads = {}
+for _, job_id in ipairs(jobs) do
+    local data = redis.call('GET', job_id)
+    if data then
+        redis.call('XADD', KEYS[2], '*', 'data', data) 
+        table.insert(payloads, job_id)
+    end
+end
+
+redis.call('ZREM', KEYS[1], unpack(payloads))  
+return #payloads
+`)
+	moved, err := script.Run(ctx, redisClient.rdb,
+		[]string{redisClient.sortedSetKey, redisClient.streamName},
+		float64(now),
+		10,
+	).Int()
+	if err != nil {
+		return 0, err
+	}
+	return moved, nil
+}
+
+func (redisClient *RedisClient) SetJobPayload(ctx context.Context, job queue.Job) error {
+	data, _ := json.Marshal(job)
+	cmd := redisClient.rdb.Set(ctx, job.ID, data, 24*time.Hour)
+	_, err := cmd.Result()
+	return err
+}

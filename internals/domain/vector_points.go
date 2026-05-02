@@ -1,7 +1,7 @@
 package domain
 
 type VectorPoint struct {
-	Id      string
+	Id      uint64
 	Vectors []float32
 	Payload map[string]any
 }

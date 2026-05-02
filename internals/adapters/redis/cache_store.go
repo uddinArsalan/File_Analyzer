@@ -19,4 +19,6 @@ type CacheStore interface {
 	AddJobToSortedSet(ctx context.Context, job string, timestamp float64) error
 	EnqueueJobToDeadLetterQueue(ctx context.Context, job queue.Job) error
 	GetJobIDsReadyForRetry(ctx context.Context) ([]string, error)
+	EvaluateRetryScript(ctx context.Context) (int, error)
+	SetJobPayload(ctx context.Context, job queue.Job) error
 }

@@ -79,14 +79,11 @@ func (w *Worker) ProcessJobs(workerName string) {
 				backoff := base + jitter
 				retryAt := time.Now().Add(time.Duration(backoff * int(time.Second))).Unix()
 				job.RetryCount++
-				// will add job id here
-				// and job payload in HSET and then in retry worker
-				// get job from Hset and prepare job payload then
-				// ZPOPMin job id and corresponding job from above and add in main stream
-				// It should be in lua script so that its safe if worker
-				// crash in between after removing job and before adding in
-				// main queue job will be lost forever
-				// and ZPopMin is atomic if multiple workers try simultaneously
+				err = w.cache.SetJobPayload(w.ctx, job)
+				if err != nil {
+					w.l.Printf("Error setting job payload %v", err)
+					continue
+				}
 				err = w.cache.AddJobToSortedSet(w.ctx, job.ID, float64(retryAt))
 				if err != nil {
 					w.l.Printf("Error adding job to redis sorted set %v", err)

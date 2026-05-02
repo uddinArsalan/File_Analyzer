@@ -3,8 +3,6 @@ package chunker
 import (
 	"file-analyzer/internals/domain"
 	"strings"
-
-	"github.com/google/uuid"
 )
 
 type Chunker struct {
@@ -25,7 +23,7 @@ func (c *Chunker) Chunk() []domain.Chunks {
 	rawChunks := strings.Split(c.Content, "\n\n")
 	chunks := make([]domain.Chunks, len(rawChunks))
 	for i, chunkText := range rawChunks {
-		chunks[i].ChunkID = uuid.NewString()
+		chunks[i].ChunkIndex = i
 		chunks[i].ChunkText = chunkText
 		chunks[i].MetaData = make(map[domain.MetaDataKeys]interface{})
 		chunks[i].MetaData[domain.UserIDKey] = c.UserID

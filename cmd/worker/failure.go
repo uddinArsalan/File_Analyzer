@@ -16,7 +16,7 @@ func (w *Worker) StartRecoveryWorker() {
 			select {
 			case <-w.ctx.Done():
 				{
-					w.l.Printf("Shutting down failure recovery... %v",w.ID)
+					w.l.Printf("Shutting down failure recovery... %v", w.ID)
 					return
 				}
 			case <-ticker.C:
@@ -35,7 +35,7 @@ func (w *Worker) StartRecoveryWorker() {
 					for i, entry := range pendingEntryList {
 						pending[i] = entry.ID
 					}
-					w.l.Printf("Pending jobs %v",pending)
+					w.l.Printf("Pending jobs %v", pending)
 					jobs, err := w.cache.ClaimPendingJobs(w.ctx, workerName, pending)
 					if err != nil {
 						w.l.Printf("Error Claiming Jobs %v", err)
@@ -44,7 +44,7 @@ func (w *Worker) StartRecoveryWorker() {
 						w.l.Printf("Processing job %+v for worker %s", job, workerName)
 						processor := processor.NewProcessor(job, w.llm, w.vector, w.users, w.object, w.cache)
 						err = processor.Process(w.ctx, w.l)
-						if err := w.cache.SendAck(w.ctx, job.ID); err != nil {
+						if err := w.cache.SendAck(w.ctx, job.StreamID); err != nil {
 							w.l.Printf("Error sending Acknowledgement.. %v", err.Error())
 							return
 						}

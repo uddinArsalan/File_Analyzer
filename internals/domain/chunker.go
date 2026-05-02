@@ -19,7 +19,8 @@ func (m MetaDataKeys) String() string {
 }
 
 type Chunks struct {
-	ChunkID   string
-	MetaData  map[MetaDataKeys]interface{}
-	ChunkText string
+	ChunkIndex int
+	SubIndex   int
+	MetaData   map[MetaDataKeys]interface{}
+	ChunkText  string
 }

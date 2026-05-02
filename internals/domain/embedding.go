@@ -6,7 +6,8 @@ import (
 
 type EmbeddingMetaData struct {
 	Embeddings []float64
-	ChunkID    string
+	ChunkIndex int
+	SubIndex   int
 	DocID      string
 	UserID     int64
 	Text       string
