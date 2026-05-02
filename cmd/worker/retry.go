@@ -1,5 +1,52 @@
 package main
 
-func (w *Worker) StartRetryingJobs(){
-	
+import (
+	"time"
+)
+
+func (w *Worker) StartRetryingJobs() {
+	w.wg.Add(1)
+	w.l.Printf("Worked ID started (RETRY WORKER) %d", w.ID)
+	go func() {
+		defer w.wg.Done()
+		for {
+			ticker := time.NewTicker(30 * time.Second)
+			select {
+			case <-w.ctx.Done():
+				{
+					w.l.Printf("Shutting down Retry Worker ID(#%d) stopping...\n", w.ID)
+					return
+				}
+			case <-ticker.C:
+				{
+					// res, err := w.cache.GetJobIDsReadyForRetry(w.ctx)
+					// if err != nil {
+					// 	w.l.Printf("Error getting jobs to retry err = %v\n", err)
+					// 	return
+					// }
+					// for _, item := range res {
+					// 	var job queue.Job
+					// 	err := json.Unmarshal([]byte(item), &job)
+					// 	if err != nil {
+					// 		w.l.Printf("Error unmarshal job , err = %v", err)
+					// 		continue
+					// 	}
+					// 	err = w.cache.EnqueueJob(w.ctx, job)
+					// 	if err != nil {
+					// 		w.l.Printf("Error adding job to stream %v\n", err)
+					// 		continue
+					// 	}
+					// }
+					jobsMoved, err := w.cache.EvaluateRetryScript(w.ctx)
+
+					if err != nil {
+						w.l.Println("scheduler error:", err)
+					} else {
+						w.l.Printf("moved %d jobs to stream\n", jobsMoved)
+					}
+
+				}
+			}
+		}
+	}()
 }

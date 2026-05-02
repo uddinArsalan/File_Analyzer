@@ -64,10 +64,10 @@ func (qClient *QdrantClient) CollectionExists(ctx context.Context) (bool, error)
 }
 
 func (qClient *QdrantClient) InsertVectorEmbeddings(ctx context.Context, vectorPoints []domain.VectorPoint) error {
-	points := make([]*qdrant.PointStruct, len(vectorPoints))
+	points := make([]*qdrant.PointStruct, 0, len(vectorPoints))
 	for _, pt := range vectorPoints {
 		point := &qdrant.PointStruct{
-			Id:      qdrant.NewID(pt.Id),
+			Id:      qdrant.NewIDNum(pt.Id),
 			Vectors: qdrant.NewVectors(pt.Vectors...),
 			Payload: qdrant.NewValueMap(pt.Payload),
 		}

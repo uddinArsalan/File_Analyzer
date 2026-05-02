@@ -14,10 +14,12 @@ import (
 )
 
 type RedisClient struct {
-	rdb           *redis.Client
-	streamName    string
-	consumerGroup string
-	channelName   string
+	rdb            *redis.Client
+	streamName     string
+	consumerGroup  string
+	channelName    string
+	sortedSetKey   string
+	deadStreamName string
 }
 
 func NewRedisClient(ctx context.Context) (*RedisClient, error) {
@@ -32,10 +34,12 @@ func NewRedisClient(ctx context.Context) (*RedisClient, error) {
 		return nil, fmt.Errorf("Error Ping Connection Redis %v", err.Error())
 	}
 	return &RedisClient{
-		rdb:           rdb,
-		streamName:    os.Getenv("REDIS_STREAM"),
-		consumerGroup: os.Getenv("REDIS_CONSUMER_GROUP"),
-		channelName:   os.Getenv("REDIS_EVENT_CHANNEL"),
+		rdb:            rdb,
+		streamName:     os.Getenv("REDIS_STREAM"),
+		consumerGroup:  os.Getenv("REDIS_CONSUMER_GROUP"),
+		channelName:    os.Getenv("REDIS_EVENT_CHANNEL"),
+		sortedSetKey:   os.Getenv("REDIS_SORTED_SET_KEY"),
+		deadStreamName: os.Getenv("REDIS_DEAD_STREAM"),
 	}, nil
 }
 
@@ -43,22 +47,18 @@ func (redisClient *RedisClient) CloseRedisClient() error {
 	return redisClient.rdb.Close()
 }
 
-func (redisClient *RedisClient) EnqueueJob(ctx context.Context, job *queue.Job) error {
-	values := map[string]interface{}{
-		"id":         job.ID,
-		"object_key": job.ObjectKey,
-		"user_id":    job.UserID,
-		"doc_id":     job.DocID,
-		"mime_type":  job.Mime_Type,
-	}
+func (redisClient *RedisClient) EnqueueJob(ctx context.Context, job queue.Job) error {
+	data, _ := json.Marshal(job)
 	res, err := redisClient.rdb.XAdd(ctx, &redis.XAddArgs{
 		ID:     "*",
 		Stream: redisClient.streamName,
-		Values: values,
+		Values: map[string]interface{}{
+			"data": data,
+		},
 	}).Result()
 
 	if err != nil {
-		fmt.Printf("Error %v", err)
+		fmt.Printf("Error insering job in main stream %v", err)
 		return err
 	}
 
@@ -156,4 +156,77 @@ func (redisClient *RedisClient) ClaimPendingJobs(ctx context.Context, consumerNa
 		return []queue.Job{}, err
 	}
 	return ToJobsList(messages), nil
+}
+
+func (redisClient *RedisClient) AddJobToSortedSet(ctx context.Context, jobID string, timestamp float64) error {
+	return redisClient.rdb.ZAdd(ctx, redisClient.sortedSetKey, redis.Z{
+		Member: jobID,
+		Score:  timestamp,
+	}).Err()
+}
+
+func (redisClient *RedisClient) EnqueueJobToDeadLetterQueue(ctx context.Context, job queue.Job) error {
+	data, _ := json.Marshal(job)
+	res, err := redisClient.rdb.XAdd(ctx, &redis.XAddArgs{
+		ID:     "*",
+		Stream: redisClient.deadStreamName,
+		Values: map[string]interface{}{
+			"data": data,
+		},
+	}).Result()
+
+	if err != nil {
+		fmt.Printf("Error inserting job in dead letter queue %v", err)
+		return err
+	}
+
+	fmt.Printf("Document job enqueued to Dead letter queue %v \n", res)
+	return nil
+}
+
+func (redisClient *RedisClient) GetJobIDsReadyForRetry(ctx context.Context) ([]string, error) {
+	cmd := redisClient.rdb.ZRange(ctx, redisClient.sortedSetKey, 0, time.Now().Unix())
+	res, err := cmd.Result()
+	if err != nil {
+		return []string{}, err
+	}
+	return res, nil
+}
+
+func (redisClient *RedisClient) EvaluateRetryScript(ctx context.Context) (int, error) {
+	now := time.Now().UnixMilli()
+	var script = redis.NewScript(`
+    local jobs = redis.call('ZRANGE', KEYS[1], 0, ARGV[1], 'BYSCORE', 'LIMIT', 0, ARGV[2])
+if #jobs == 0 then
+    return 0
+end
+
+local payloads = {}
+for _, job_id in ipairs(jobs) do
+    local data = redis.call('GET', job_id)
+    if data then
+        redis.call('XADD', KEYS[2], '*', 'data', data) 
+        table.insert(payloads, job_id)
+    end
+end
+
+redis.call('ZREM', KEYS[1], unpack(payloads))  
+return #payloads
+`)
+	moved, err := script.Run(ctx, redisClient.rdb,
+		[]string{redisClient.sortedSetKey, redisClient.streamName},
+		float64(now),
+		10,
+	).Int()
+	if err != nil {
+		return 0, err
+	}
+	return moved, nil
+}
+
+func (redisClient *RedisClient) SetJobPayload(ctx context.Context, job queue.Job) error {
+	data, _ := json.Marshal(job)
+	cmd := redisClient.rdb.Set(ctx, job.ID, data, 24*time.Hour)
+	_, err := cmd.Result()
+	return err
 }

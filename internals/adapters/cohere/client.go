@@ -5,10 +5,12 @@ import (
 	"file-analyzer/internals/domain"
 	"file-analyzer/internals/utils"
 	"fmt"
-	cohere "github.com/cohere-ai/cohere-go/v2"
-	"github.com/cohere-ai/cohere-go/v2/client"
+	"hash/fnv"
 	"log"
 	"os"
+
+	cohere "github.com/cohere-ai/cohere-go/v2"
+	"github.com/cohere-ai/cohere-go/v2/client"
 )
 
 type UserClient struct {
@@ -37,6 +39,12 @@ func (cc *UserClient) GenerateEmbedding(ctx context.Context, text []string, inpu
 	return resp.Embeddings.Float, nil
 }
 
+func hashToUint64(chunkKey string) uint64 {
+	h := fnv.New64a()
+	h.Write([]byte(chunkKey))
+	return h.Sum64()
+}
+
 func (cc *UserClient) ProcessChunks(ctx context.Context, chunks []domain.Chunks) ([]domain.VectorPoint, error) {
 
 	chunkBatches := utils.BatchChunksForEmbedding(chunks)
@@ -56,7 +64,8 @@ func (cc *UserClient) ProcessChunks(ctx context.Context, chunks []domain.Chunks)
 		for i, embed := range embeddings {
 			accumulatedEmbeddings = append(accumulatedEmbeddings, domain.EmbeddingMetaData{
 				Embeddings: embed,
-				ChunkID:    batch[i].ChunkID,
+				ChunkIndex: batch[i].ChunkIndex,
+				SubIndex:   batch[i].SubIndex,
 				DocID:      batch[i].MetaData[domain.DocIDKey].(string),
 				UserID:     batch[i].MetaData[domain.UserIDKey].(int64),
 				Text:       batch[i].ChunkText,
@@ -71,14 +80,18 @@ func (cc *UserClient) ProcessChunks(ctx context.Context, chunks []domain.Chunks)
 		for j, v := range embed.Embeddings {
 			vector[j] = float32(v)
 		}
+		chunkKey := fmt.Sprintf("%s_%d_%d", embed.DocID, embed.ChunkIndex, embed.SubIndex)
+		id := hashToUint64(chunkKey)
 		point := domain.VectorPoint{
-			Id:      embed.ChunkID,
+			Id:      id,
 			Vectors: vector,
 			Payload: map[string]any{
-				"user_id":  embed.UserID,
-				"doc_id":   embed.DocID,
-				"chunk_id": embed.ChunkID,
-				"text":     embed.Text,
+				"user_id":     embed.UserID,
+				"doc_id":      embed.DocID,
+				"chunk_index": embed.ChunkIndex,
+				"sub_index":   embed.SubIndex,
+				"text":        embed.Text,
+				"chunk_key":   chunkKey,
 			},
 		}
 		points = append(points, point)
