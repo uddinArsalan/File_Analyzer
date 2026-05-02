@@ -10,7 +10,9 @@ import (
 	repo "file-analyzer/internals/repository"
 	"fmt"
 	"log"
+	"math/rand/v2"
 	"sync"
+	"time"
 )
 
 type Worker struct {
@@ -26,7 +28,8 @@ type Worker struct {
 }
 
 func (w *Worker) Start() {
-	w.l.Printf("Worked ID started %d", w.ID)
+	w.wg.Add(1)
+	w.l.Printf("Worked ID started (MAIN WORKER) %d", w.ID)
 	go func() {
 		defer w.wg.Done()
 		for {
@@ -46,20 +49,64 @@ func (w *Worker) Start() {
 	}()
 }
 
+const MAX_RETRY_COUNT = 3
+const BASE_DELAY = 1000 // 1 sec
+
 func (w *Worker) ProcessJobs(workerName string) {
 	jobs, err := w.cache.ReadJobByConsumer(w.ctx, workerName)
 	if err != nil {
 		w.l.Printf("Error reading jobs from stream")
 		return
 	}
-
-	w.l.Printf("Job picked by %s", workerName)
 	for _, job := range jobs {
 		// process job
 		w.l.Printf("Processing job %v for worker %v", job, workerName)
 		processor := processor.NewProcessor(job, w.llm, w.vector, w.users, w.object, w.cache)
 		err = processor.Process(w.ctx, w.l)
-		if err := w.cache.SendAck(w.ctx, job.ID); err != nil {
+		if err != nil {
+			w.l.Printf("Error Processing job %v err = %v", job, err)
+			// But send ack still so it removes from pel
+			retryCount := job.RetryCount
+			if retryCount < MAX_RETRY_COUNT {
+				err := w.users.UpdateDocStatus(job.DocID, "RETRYING")
+				if err != nil {
+					w.l.Printf("Error Updating status of doc with id %v err = %v", job.DocID, err)
+					continue
+				}
+				base := BASE_DELAY * (1 << retryCount)
+				jitter := rand.IntN(300)
+
+				backoff := base + jitter
+				retryAt := time.Now().Add(time.Duration(backoff * int(time.Second))).Unix()
+				job.RetryCount++
+				err = w.cache.SetJobPayload(w.ctx, job)
+				if err != nil {
+					w.l.Printf("Error setting job payload %v", err)
+					continue
+				}
+				err = w.cache.AddJobToSortedSet(w.ctx, job.ID, float64(retryAt))
+				if err != nil {
+					w.l.Printf("Error adding job to redis sorted set %v", err)
+					continue
+				}
+
+			} else {
+				// Move into dead letter queue
+				err := w.cache.EnqueueJobToDeadLetterQueue(w.ctx, job)
+				if err != nil {
+					w.l.Printf("Error adding job to dead letter queue %v", err)
+					continue
+				}
+				// Update status
+				err = w.users.UpdateDocStatus(job.DocID, "FAILED")
+				if err != nil {
+					w.l.Printf("Error Updating status of doc with id %v", job.DocID)
+					continue
+				}
+			}
+			// A worker will pick this job from sorted set and add it in main queue
+		}
+		if err := w.cache.SendAck(w.ctx, job.StreamID); err != nil {
 			w.l.Printf("Error sending Acknowledgement.. %v", err.Error())
 			return
 		}

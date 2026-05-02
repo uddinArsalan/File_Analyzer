@@ -49,13 +49,14 @@ func (f *FileService) CheckExistence(ctx context.Context, userID int64, docID st
 	if !isExists {
 		return ErrDocumentNotFound
 	}
-	job := &queue.Job{
+	job := queue.Job{
 		ID:        uuid.New().String(),
 		ObjectKey: objectKey,
 		UserID:    userID,
 		DocID:     docID,
 		Mime_Type: doc.Mime_Type,
 		Size:      doc.DocSize,
+		RetryCount: 0,
 	}
 	if err := f.cache.EnqueueJob(ctx, job); err != nil {
 		return err

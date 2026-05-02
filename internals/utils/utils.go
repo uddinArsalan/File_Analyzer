@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"file-analyzer/internals/domain"
 	"net/http"
-	"fmt"
 )
 
 type ApiResponse struct {
@@ -59,11 +58,11 @@ func BatchChunksForEmbedding(chunks []domain.Chunks) [][]domain.Chunks {
 					batches = append(batches, currentBatch)
 					currentBatch = []domain.Chunks{}
 				}
-				chunkId := fmt.Sprintf("%s_%d",chunk.ChunkID,subIndex)
 				currentBatch = append(currentBatch, domain.Chunks{
-					ChunkID:  chunkId,
-					MetaData:  chunk.MetaData,
-					ChunkText: currChunkText,
+					ChunkIndex: chunk.ChunkIndex,
+					SubIndex:   subIndex,
+					MetaData:   chunk.MetaData,
+					ChunkText:  currChunkText,
 				})
 				subIndex++
 				j += MAX_CHUNK_SIZE
